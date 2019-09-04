@@ -26,15 +26,31 @@ accent_image:
   * Vue
 
 ![Full-width image](/assets/img/projects/estimate/2.png){:.lead data-width="800" data-height="100"}
-무료견적
+Sample Screen 1
 {:.figure}
 
 ![Full-width image](/assets/img/projects/estimate/3.png){:.lead data-width="800" data-height="100"}
-실시간 견적
+Sample Screen 2
 {:.figure}
 
 ![Full-width image](/assets/img/projects/estimate/4.png){:.lead data-width="800" data-height="100"}
-업체 상세화면
+Sample Screen 3
+{:.figure}
+
+![Full-width image](/assets/img/projects/estimate/5.png){:.lead data-width="800" data-height="100"}
+Sample Screen 4
+{:.figure}
+
+![Full-width image](/assets/img/projects/estimate/6.png){:.lead data-width="800" data-height="100"}
+Sample Screen 5
+{:.figure}
+
+![Full-width image](/assets/img/projects/estimate/7.png){:.lead data-width="800" data-height="100"}
+Sample Screen 6
+{:.figure}
+
+![Full-width image](/assets/img/projects/estimate/8.png){:.lead data-width="800" data-height="100"}
+Sample Screen 7
 {:.figure}
 
 

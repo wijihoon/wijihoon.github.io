@@ -30,21 +30,24 @@ accent_image:
 
 
 ![Full-width image](/assets/img/projects/lookfor/2.png){:.lead data-width="800" data-height="100"}
-구해요 등록
+Sample Screen 1
 {:.figure}
 
 ![Full-width image](/assets/img/projects/lookfor/3.png){:.lead data-width="800" data-height="100"}
-구해요 등록 - 매물 종류 선택
+Sample Screen 2
 {:.figure}
 
 ![Full-width image](/assets/img/projects/lookfor/4.png){:.lead data-width="800" data-height="100"}
-실시간 구해요
+Sample Screen 3
 {:.figure}
 
 ![Full-width image](/assets/img/projects/lookfor/5.png){:.lead data-width="800" data-height="100"}
-내구해요 보관함 - 로그인
+Sample Screen 4
 {:.figure}
 
+![Full-width image](/assets/img/projects/lookfor/6.png){:.lead data-width="800" data-height="100"}
+Sample Screen 5
+{:.figure}
 
 
 

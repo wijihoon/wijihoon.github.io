@@ -26,11 +26,35 @@ accent_image:
   * Git
 
 ![Full-width image](/assets/img/projects/semy/2.png){:.lead data-width="800" data-height="100"}
-활용 화면 1
+Sample Screen 1
 {:.figure}
 
 ![Full-width image](/assets/img/projects/semy/3.png){:.lead data-width="800" data-height="100"}
-활용 화면 2
+Sample Screen 2
+{:.figure}
+
+![Full-width image](/assets/img/projects/semy/3.png){:.lead data-width="800" data-height="100"}
+Sample Screen 3
+{:.figure}
+
+![Full-width image](/assets/img/projects/semy/4.png){:.lead data-width="800" data-height="100"}
+Sample Screen 4
+{:.figure}
+
+![Full-width image](/assets/img/projects/semy/5.png){:.lead data-width="800" data-height="100"}
+Sample Screen 5
+{:.figure}
+
+![Full-width image](/assets/img/projects/semy/6.png){:.lead data-width="800" data-height="100"}
+Sample Screen 6
+{:.figure}
+
+![Full-width image](/assets/img/projects/semy/7.png){:.lead data-width="800" data-height="100"}
+Sample Screen 7
+{:.figure}
+
+![Full-width image](/assets/img/projects/semy/8.png){:.lead data-width="800" data-height="100"}
+Sample Screen 8
 {:.figure}
 
 

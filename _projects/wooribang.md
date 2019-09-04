@@ -2,8 +2,8 @@
 layout: project
 title: '우리방'
 date: 1 Jan 2016
-image: /assets/img/projects/wooribang/1.png
-screenshot: /assets/img/projects/wooribang/1.png
+image: /assets/img/projects/wooribang/1.jpg
+screenshot: /assets/img/projects/wooribang/1.jpg
 links:
   - title: 원룸, 투룸이 필요할 땐 우리방
     url: http://wooribang.co.kr 
@@ -27,8 +27,12 @@ accent_image:
   * Composer
   * Git
 
-![Full-width image](/assets/img/projects/wooribang/2.png){:.lead data-width="800" data-height="100"}
-지도에서 매물찾기 화면
+![Full-width image](/assets/img/projects/wooribang/2.jpg){:.lead data-width="800" data-height="100"}
+Sample Screen 1
+{:.figure}
+
+![Full-width image](/assets/img/projects/wooribang/3.jpg){:.lead data-width="800" data-height="100"}
+Sample Screen 2
 {:.figure}
 
 

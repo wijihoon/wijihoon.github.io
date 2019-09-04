@@ -17,11 +17,11 @@ accent_image:
 * Swiper 라이브러리 적용
 
 ![Full-width image](/assets/img/projects/viewer/2.png){:.lead data-width="800" data-height="100"}
-PC 화면
+Sample Screen 1
 {:.figure}
 
 ![Full-width image](/assets/img/projects/viewer/3.png){:.lead data-width="800" data-height="100"}
-Mobile 화면
+Sample Screen 2
 {:.figure}
 
 
