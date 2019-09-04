@@ -2,14 +2,16 @@
 # If you don't have a JSON Resume you can just edit this YAML file instead.
 # See also: <https://jsonresume.org/>.
 basics:
-  name: "임환현"
-  label: "웹 개발자"
+  name: "HwanHyeon Lim"
+  label: "PHP WebDeveloper"
   picture: "/assets/icons/profile.jpg"
   email: "limhwanhyeon@naver.com"
   phone: "(010) 010-5561-0169"
   website: "https://www.hwanhyeon.com"
   summary: >
-    -
+    2019년 기준 올해 4년차 웹개발자 입니다. 어릴적부터 게임에 관심이 많아 직업을 찾다보니 웹개발자
+    라는 직업을 찾게 되었습니다. 주로 PHP 언어를 사용하고 있으며 현 시대에 맞춰 프레임워크를 주로 다루고 있습니다.
+    최근에는 프론트엔드 분야인 'VueJs' 를 집중적으로 공략하고 있습니다. 감사합니다.
   location:
     address: "경상남도 창원시 성산구 대방동 357"
     postalCode: ""
@@ -69,15 +71,15 @@ work:
 #    summary: "Global movement of free coding clubs for young people."
 #    highlights:
 #      - "Awarded 'Teacher of the Month'"
-#education:
-#  - institution: "한빛교육센터"
-#    area: "정보시스템 기술지원 및 운영 전문가 과정"
-#    studyType: "JAVA"
-#    startDate: "2014-03-01"
-#    endDate: "2014-07-01"
-#    gpa: "-"
-#    courses:
-#      - "Java, Jsp, Servlet, JavaScipt, JQuery, HTML5, CSS3, Framework, Database"
+education:
+  - institution: "진주기계공업고등학교"
+    area: "컴퓨터응용기계과"
+    studyType: "CAD"
+    startDate: "2006-01-01"
+    endDate: "2010-01-01"
+    gpa: "-"
+    courses:
+      - "하라는 공부는 안하고 컴퓨터만 주구장창 하다가 졸업"
 #awards:
 #  - title: "Digital Compression Pioneer Award"
 #    date: "2014-11-01"
