@@ -2,8 +2,8 @@
 # If you don't have a JSON Resume you can just edit this YAML file instead.
 # See also: <https://jsonresume.org/>.
 basics:
-  name: "HwanHyeon Lim"
-  label: "PHP WebDeveloper"
+  name: "임환현"
+  label: "웹프로그래머"
   picture: "/assets/icons/profile.jpg"
   email: "limhwanhyeon@naver.com"
   phone: "(010) 010-5561-0169"
@@ -11,7 +11,7 @@ basics:
   summary: >
     2019년 기준 올해 5년차 웹개발자 입니다. 어릴적부터 게임에 관심이 많아 직업을 찾다보니 웹개발자
     라는 직업을 찾게 되었습니다. 주로 PHP 언어를 사용하고 있으며 현 시대에 맞춰 프레임워크를 주로 다루고 있습니다.
-    최근에는 프론트엔드 분야인 'VueJs' 를 집중적으로 공략하고 있습니다. 감사합니다.
+    최근에는 프론트엔드 분야인 'VueJs' 를 집중적으로 공략하고 있습니다.
   location:
     address: "경상남도 창원시 성산구 대방동 357"
     postalCode: ""
