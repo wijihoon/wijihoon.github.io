@@ -29,8 +29,8 @@ work:
   - company: "씨아이씨라이프"
     position: "사원"
     website: "http://www.ciclife.com"
-    startDate: "2015-01-01"
-    endDate: "2016-03-01"
+    startDate: "2015-01-05"
+    endDate: "2016-02-29"
     summary: >
       SI
     highlights:
@@ -40,8 +40,8 @@ work:
   - company: "주식회사 트렌스폼"
     position: "대리"
     website: "http://www.wooribang.co.kr"
-    startDate: "2016-03-01"
-    endDate: "2017-03-01"
+    startDate: "2016-03-07"
+    endDate: "2017-03-08"
     summary: >
       Solution
     highlights:
@@ -52,8 +52,8 @@ work:
   - company: "(주)인터넷교차로"
     position: "주임"
     website: "http://www.icross.co.kr"
-    startDate: "2017-04-05"
-    endDate: "2019-11-29"
+    startDate: "2017-04-10"
+    endDate: "2019-12-02"
     summary: >
       Solution
     highlights:
