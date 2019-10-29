@@ -9,3 +9,4 @@ hide_description: true
 
 ## 기록
 - 2019.09.03 Github Pages + jekyll
+- 2019.10.29 ~ 안드로이드 공부
