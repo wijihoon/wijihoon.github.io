@@ -1,7 +1,7 @@
 ---
 layout: project
 title: '부동산 구해요'
-date: 1 Jan 2019
+date: 7 Jan 2019
 image: /assets/img/projects/lookfor/1.png
 screenshot: /assets/img/projects/lookfor/1.png
 links:
@@ -20,13 +20,9 @@ accent_image:
 * Period : 2019.05 ~ 2019.07
 * Language : PHP & Laravel
 * Database : MySQL
-* Laravel Three Project
-  * 화면 & 관리자 개발 100%
+* Participation : 화면 & 관리자 개발 100%
+* Description
   * 부동산 데이터 활용 매칭 서비스
-  * Package
-  * Composer
-  * Git
-  * Vue
 
 
 ![Full-width image](/assets/img/projects/lookfor/2.png){:.lead data-width="800" data-height="100"}

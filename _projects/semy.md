@@ -18,12 +18,11 @@ accent_image:
 * Period : 2017.07 ~ 2017.10
 * Language : PHP & Laravel
 * Database : MySQL
-* Laravel First Project
-  * 화면 & 관리자 개발 100%
-  * 기존 게시판 데이터 활용
-  * Composer
-  * Redis
-  * Git
+* Participation : 화면 & 관리자 개발 100%
+* Description
+  * 입사 후 Laravel 첫 프로젝트
+  * 기존 사내 게시판 데이터를 활용하며, 모바일 홈페이지 CMS 구현
+  * Redis 를 사용하여 쿼리 캐쉬 적용
 
 ![Full-width image](/assets/img/projects/semy/2.png){:.lead data-width="800" data-height="100"}
 Sample Screen 1

@@ -21,7 +21,7 @@ accent_image:
 * Period : -
 * Language : PHP & Codeigniter
 * Database : MySQL
-* Laravel First Project
+* 설명
   * 기존 Codeinigter 솔루션 분석 후 신규 개발
   * Daum Map API (Marker, Cluster)
   * Composer
