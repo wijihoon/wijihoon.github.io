@@ -1,6 +1,6 @@
 ---
 layout: post
-title: 2019.08.15 ~ 2019.08.16 영산강 & 섬진강
+title: 2019.08.15 ~ 2019.08.16 영산강 & 섬진강 종주
 description: >
   영산강 ~ 섬진강 종주
 image: /assets/img/blog/yngsnRvrsm/1.jpg
