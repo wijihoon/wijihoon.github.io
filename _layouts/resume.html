@@ -4,7 +4,7 @@ layout: base
 ---
 
 {% assign strings = site.data.strings %}
-{% assign colon = strings.colon | default:":" %}
+{% assign colon = strings.colon |   default:":" %}
 {% assign icons = strings.resume.icons %}
 {% assign from_to_format = strings.date_formats.resume | default:"%b %Y" %}
 

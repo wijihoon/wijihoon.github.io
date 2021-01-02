@@ -2,18 +2,18 @@
 # If you don't have a JSON Resume you can just edit this YAML file instead.
 # See also: <https://jsonresume.org/>.
 basics:
-  name: "임환현"
-  label: "웹프로그래머"
+  name: "위지훈"
+  label: "프론트앤드"
   picture: "/assets/icons/profile.jpg"
-  email: "limhwanhyeon@naver.com"
-  phone: "(010) 010-5561-0169"
-  website: "https://www.hwanhyeon.com"
+  email: "wijihoon123@naver.com"
+  phone: "(010) 010-9819-7168"
+  website: "https://velog.io/@wijihoon123"
   summary: >
     2019년 기준 올해 5년차 웹개발자 입니다. 어릴적부터 게임에 관심이 많아 직업을 찾다보니 웹개발자
     라는 직업을 찾게 되었습니다. 주로 PHP 언어를 사용하고 있으며 현 시대에 맞춰 프레임워크를 주로 다루고 있습니다.
     최근에는 프론트엔드 분야인 'VueJs' 를 집중적으로 공략하고 있습니다.
   location:
-    address: "경상남도 창원시 성산구 대방동 357"
+    address: "서울특별시 구로구 개봉로 17나길 51-6 401호"
     postalCode: ""
     city: ""
     countryCode: ""
@@ -26,41 +26,17 @@ basics:
       username: "-"
       url: ""
 work:
-  - company: "씨아이씨라이프"
-    position: "사원"
-    website: "http://www.ciclife.com"
-    startDate: "2015-01-05"
-    endDate: "2016-02-29"
+  - company: "아주캐피탈"
+    position: "manager"
+    website: "http://www.ajucapital.co.kr"
+    startDate: "2019-09-01"
+    endDate: "2021-00-00"
     summary: >
-      SI
+      capital
     highlights:
       - "회사 자체 솔루션을 활용하여 홈페이지 유지보수 및 개발"
       - "개발언어에 대한 기본지식과 고객간의 소통을 배움"
       - "1년 째 되던 해 회사 연봉협상 부족으로 이직 결심"
-  - company: "주식회사 트렌스폼"
-    position: "대리"
-    website: "http://www.wooribang.co.kr"
-    startDate: "2016-03-07"
-    endDate: "2017-03-08"
-    summary: >
-      Solution
-    highlights:
-      - "부동산 솔루션을 리뉴얼 하는 작업 진행"
-      - "Codeigniter Framework 학습 및 개발"
-      - "Daum 지도 API 을 사용하여 데이터 클러스터링화 구현"
-      - "회사 경영난으로 인하여 퇴사"
-  - company: "(주)인터넷교차로"
-    position: "주임"
-    website: "http://www.icross.co.kr"
-    startDate: "2017-04-10"
-    endDate: "2019-12-02"
-    summary: >
-      Solution
-    highlights:
-      - "회사 자체 솔루션 유지보수 및 프로젝트 진행"
-      - "Laravel Framework 을 진행하면서 Modern PHP 학습"
-      - "회사에서 기회를 많이 주어 엉첨난 성장을 이뤘던 것 같음"
-      - "회사 경영난으로 인하여 퇴사"
 #volunteer:
 #  - organization: "CoderDojo"
 #    position: "Teacher"
@@ -71,11 +47,11 @@ work:
 #    highlights:
 #      - "Awarded 'Teacher of the Month'"
 education:
-  - institution: "진주기계공업고등학교"
-    area: "컴퓨터응용기계과"
-    studyType: "CAD"
-    startDate: "2006-01-01"
-    endDate: "2010-01-01"
+  - institution: "(미정)대학원"
+    area: "인공지능"
+    studyType: "소프트웨어"
+    startDate: "2021-03-08"
+    endDate: "202X-XX-XX"
     gpa: "-"
     courses:
       - "하라는 공부는 안하고 컴퓨터만 주구장창 하다가 졸업"
@@ -94,23 +70,26 @@ skills:
   - name: "BackEnd"
     level: "master"
     keywords:
-      - "PHP"
-      - "Laravel"
-      - "CodeIgniter"
+      - "Java"
   - name: "FrontEnd"
     level: "intermediate"
     keywords:
+      - "node.js"
+      - "React"
       - "Javascript"
       - "jQuery"
-      - "Vue"
   - name: "Database"
     level: "intermediate"
     keywords:
-      - "MySQL"
+      - "Oracle"
+      - "DB2"
   - name: "Server"
     level: "beginner"
     keywords:
       - "Linux"
+      - "Jeus"
+      - "Nginx"
+      - "CentOS"
 #languages:
 #  - language: "한국어"
 #    fluency: "Native speaker"
