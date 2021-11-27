@@ -3,7 +3,7 @@
 # See also: <https://jsonresume.org/>.
 basics:
   name: "위지훈"
-  label: "프론트앤드"
+  label: "백앤드"
   picture: "/assets/icons/profile.jpg"
   email: "wijihoon123@naver.com"
   phone: "(010) 010-9819-7168"
@@ -26,17 +26,26 @@ basics:
       username: "-"
       url: ""
 work:
-  - company: "아주캐피탈"
+  - company: "우리금융캐피탈(아주캐피탈)"
     position: "manager"
     website: "http://www.ajucapital.co.kr"
     startDate: "2019-09-01"
-    endDate: "2021-08-31"
+    endDate: "2021-06-13"
     summary: >
       capital
     highlights:
       - "회사 자체 솔루션을 활용하여 홈페이지 유지보수 및 개발"
       - "개발언어에 대한 기본지식과 고객간의 소통을 배움"
-      - "1년 째 되던 해 회사 연봉협상 부족으로 이직 결심"
+  - company: "한국캐피"
+    position: "사원"
+    website: "http://www.hankookcapital.com"
+    startDate: "2021-06-14"
+    endDate: ""
+    summary: >
+      capital
+    highlights:
+      - "회사 자체 솔루션을 활용하여 홈페이지 유지보수 및 개발"
+      - "개발언어에 대한 기본지식과 고객간의 소통을 배움"
 #volunteer:
 #  - organization: "CoderDojo"
 #    position: "Teacher"
