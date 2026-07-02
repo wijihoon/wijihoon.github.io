@@ -19,9 +19,13 @@ jobs:
 
       - name: Run agent team
         env:
+          PYTHONUNBUFFERED: "1"
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GEO: "KR,US"
+          EN_POSTS: "1"
+          # 한국 채널/수익화
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
@@ -29,11 +33,23 @@ jobs:
           NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
           NAVER_REFRESH_TOKEN: ${{ secrets.NAVER_REFRESH_TOKEN }}
-          DEVTO_API_KEY: ${{ secrets.DEVTO_API_KEY }}
           COUPANG_ACCESS_KEY: ${{ secrets.COUPANG_ACCESS_KEY }}
           COUPANG_SECRET_KEY: ${{ secrets.COUPANG_SECRET_KEY }}
-          ADSENSE_CLIENT: "ca-pub-6340177904204536"   # 퍼블리셔 ID는 공개값이라 하드코딩 OK
-          ADFIT_UNIT: ${{ secrets.ADFIT_UNIT }}        # 애드핏 광고단위 발급 후 추가
+          ADSENSE_CLIENT: "ca-pub-6340177904204536"
+          ADFIT_UNIT: ${{ secrets.ADFIT_UNIT }}
+          ADFIT_UNIT2: ${{ secrets.ADFIT_UNIT2 }}
+          # 영어 채널/수익화 (등록하면 자동 활성)
+          BLOGGER_BLOG_ID_EN: ${{ secrets.BLOGGER_BLOG_ID_EN }}
+          DEVTO_API_KEY: ${{ secrets.DEVTO_API_KEY }}
+          HASHNODE_TOKEN: ${{ secrets.HASHNODE_TOKEN }}
+          HASHNODE_PUB_ID: ${{ secrets.HASHNODE_PUB_ID }}
+          AMAZON_TAG: ${{ secrets.AMAZON_TAG }}
+          # 이미지 (스톡 사진)
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
+          # 배포
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           pip install -r requirements.txt
           PYTHONPATH=bot python bot/main.py
