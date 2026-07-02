@@ -18,7 +18,6 @@ def _post(url, data=None, headers=None, form=False):
     return json.loads(urllib.request.urlopen(req, timeout=30).read().decode())
 
 
-# ── 마크다운 → 심플 HTML (외부 패키지 0) ──
 def md2html(md: str) -> str:
     h = md
     h = re.sub(r"^### (.*)$", r"<h3>\1</h3>", h, flags=re.M)
@@ -31,7 +30,6 @@ def md2html(md: str) -> str:
     return "\n".join(paras)
 
 
-# ── 쿠팡 파트너스: 카테고리 관련 상품 박스 (HMAC 서명, 무패키지) ──
 def coupang_box(keyword: str) -> str:
     ak, sk = os.environ.get("COUPANG_ACCESS_KEY"), os.environ.get("COUPANG_SECRET_KEY")
     if not (ak and sk):
@@ -60,36 +58,38 @@ def coupang_box(keyword: str) -> str:
         return ""
 
 
-# ── 인아티클 광고 슬롯 (애드센스/애드핏 — ID 있으면 본문 중간 삽입) ──
-def ad_slot_html() -> str:
+def adsense_slot() -> str:
     client = os.environ.get("ADSENSE_CLIENT", "")
-    if client:
-        return (f'<ins class="adsbygoogle" style="display:block" data-ad-client="{client}" '
-                'data-ad-format="auto" data-full-width-responsive="true"></ins>'
-                "<script>(adsbygoogle=window.adsbygoogle||[]).push({});</script>")
-    adfit = os.environ.get("ADFIT_UNIT", "")
-    if adfit:
-        return (f'<ins class="kakao_ad_area" style="display:none;" data-ad-unit="{adfit}" '
-                'data-ad-width="728" data-ad-height="90"></ins>'
-                '<script async src="https://t1.daumcdn.net/kas/static/ba.min.js"></script>')
-    return ""
+    if not client:
+        return ""
+    return (f'<ins class="adsbygoogle" style="display:block" data-ad-client="{client}" '
+            'data-ad-format="auto" data-full-width-responsive="true"></ins>'
+            "<script>(adsbygoogle=window.adsbygoogle||[]).push({});</script>")
+
+
+def adfit_slot() -> str:
+    unit = os.environ.get("ADFIT_UNIT", "")
+    if not unit:
+        return ""
+    return (f'<ins class="kakao_ad_area" style="display:none;" data-ad-unit="{unit}" '
+            'data-ad-width="320" data-ad-height="100"></ins>'
+            '<script async src="https://t1.daumcdn.net/kas/static/ba.min.js"></script>')
 
 
 def inject_monetize(body_md: str, category: str, topic: str) -> str:
-    """본문 중간 광고 + 하단 쿠팡 박스 삽입 (마크다운에 HTML 혼합 — Jekyll/Blogger 모두 렌더 OK)"""
-    ad = ad_slot_html()
-    if ad:
-        paras = body_md.split("\n\n")
-        mid = len(paras) // 2
-        paras.insert(mid, ad)
-        body_md = "\n\n".join(paras)
+    """애드센스=본문 중간, 애드핏=본문 2/3 지점, 쿠팡=하단. 있는 것만 삽입."""
+    paras = body_md.split("\n\n")
+    g, k = adsense_slot(), adfit_slot()
+    if k:
+        paras.insert(max(1, len(paras) * 2 // 3), k)
+    if g:
+        paras.insert(max(1, len(paras) // 2), g)
+    body_md = "\n\n".join(paras)
     body_md += coupang_box(topic if len(topic) < 20 else category)
     return body_md
 
 
-# ══════════ 게시 채널들 (시크릿 없으면 None 반환 → 스킵) ══════════
-
-def publish_blogger(title, body_md, category) -> str | None:
+def publish_blogger(title, body_md, category):
     cid, csec = os.environ.get("GOOGLE_CLIENT_ID"), os.environ.get("GOOGLE_CLIENT_SECRET")
     rtok, blog = os.environ.get("GOOGLE_REFRESH_TOKEN"), os.environ.get("BLOGGER_BLOG_ID")
     if not all([cid, csec, rtok, blog]):
@@ -104,7 +104,7 @@ def publish_blogger(title, body_md, category) -> str | None:
     return res.get("url")
 
 
-def publish_naver(title, body_md, category) -> str | None:
+def publish_naver(title, body_md, category):
     cid, csec = os.environ.get("NAVER_CLIENT_ID"), os.environ.get("NAVER_CLIENT_SECRET")
     rtok = os.environ.get("NAVER_REFRESH_TOKEN")
     if not all([cid, csec, rtok]):
@@ -119,7 +119,7 @@ def publish_naver(title, body_md, category) -> str | None:
     return "네이버 게시 OK" if res else None
 
 
-def publish_devto(title, body_md, category) -> str | None:
+def publish_devto(title, body_md, category):
     key = os.environ.get("DEVTO_API_KEY")
     if not key:
         return None

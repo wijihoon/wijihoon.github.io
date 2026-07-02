@@ -25,9 +25,17 @@ jobs:
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
           BLOGGER_BLOG_ID: ${{ secrets.BLOGGER_BLOG_ID }}
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+          NAVER_REFRESH_TOKEN: ${{ secrets.NAVER_REFRESH_TOKEN }}
+          DEVTO_API_KEY: ${{ secrets.DEVTO_API_KEY }}
+          COUPANG_ACCESS_KEY: ${{ secrets.COUPANG_ACCESS_KEY }}
+          COUPANG_SECRET_KEY: ${{ secrets.COUPANG_SECRET_KEY }}
+          ADSENSE_CLIENT: "ca-pub-6340177904204536"   # 퍼블리셔 ID는 공개값이라 하드코딩 OK
+          ADFIT_UNIT: ${{ secrets.ADFIT_UNIT }}        # 애드핏 광고단위 발급 후 추가
         run: |
           pip install -r requirements.txt
-          python bot/main.py
+          PYTHONPATH=bot python bot/main.py
 
       - name: Commit & push posts
         run: |
