@@ -2,7 +2,7 @@ name: Daily Trend Blog
 
 on:
   schedule:
-    - cron: '0 22 * * *'      # 07:00 KST
+    - cron: '0 22 * * *'
   workflow_dispatch:
 
 permissions:
@@ -14,27 +14,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: '3.12' }
+        with:
+          python-version: '3.12'
 
       - name: Run agent team
-        working-directory: .
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          # ↓ 있으면 해당 채널/수익화 자동 활성, 없으면 스킵
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
-          BLOGGER_BLOG_ID: ${{ secrets.BLOGGER_BLOG_ID }}
-          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
-          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
-          NAVER_REFRESH_TOKEN: ${{ secrets.NAVER_REFRESH_TOKEN }}
-          DEVTO_API_KEY: ${{ secrets.DEVTO_API_KEY }}
-          COUPANG_ACCESS_KEY: ${{ secrets.COUPANG_ACCESS_KEY }}
-          COUPANG_SECRET_KEY: ${{ secrets.COUPANG_SECRET_KEY }}
-          ADSENSE_CLIENT: ${{ secrets.ADSENSE_CLIENT }}
-          ADFIT_UNIT: ${{ secrets.ADFIT_UNIT }}
-        run: PYTHONPATH=bot python bot/main.py
+        run: |
+          pip install -r requirements.txt
+          python bot/main.py
 
       - name: Commit & push posts
         run: |

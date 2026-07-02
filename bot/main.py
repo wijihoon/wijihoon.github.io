@@ -13,7 +13,12 @@ def notify(msg):
     print(msg)
     if not WEBHOOK: return
     try:
-        req = urllib.request.Request(WEBHOOK, data=json.dumps({"content": msg[:1900]}).encode(),
+        # User-Agent 헤더 추가
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
+        req = urllib.request.Request(WEBHOOK, data=json.dumps({"content": msg[:1900]}, headers=headers).encode(),
                                      headers={"Content-Type": "application/json"})
         urllib.request.urlopen(req, timeout=10)
     except Exception as e:
@@ -21,7 +26,7 @@ def notify(msg):
 
 def collect_trends(geo="KR"):
     req = urllib.request.Request(f"https://trends.google.com/trending/rss?geo={geo}",
-                                 headers={"User-Agent": "Mozilla/5.0"})
+                                 headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"})
     xml = urllib.request.urlopen(req, timeout=20).read().decode("utf-8", "ignore")
     out = []
     for it in re.findall(r"<item>(.*?)</item>", xml, re.S):
