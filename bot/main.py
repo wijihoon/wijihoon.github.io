@@ -1,4 +1,4 @@
-"""자율 트렌드 블로그 팀 v3 — Groq→Gemini 폴백, 호출 33% 절감, 제목 정화"""
+"""자율 트렌드 블로그 팀 v4 — 4단계 LLM 캐스케이드(모델별 쿼터 분산), 사람 개입 0"""
 import html
 import json
 import os
@@ -53,58 +53,62 @@ def collect_trends(geo="KR"):
         return []
 
 
-# ───────── LLM: Groq 1순위 → Gemini 폴백 (어떤 에러든 폴백) ─────────
-def _groq(prompt, max_tokens):
+# ───────── LLM 캐스케이드: 모델별로 무료 쿼터가 '따로' 잡히는 점을 활용 ─────────
+def _groq(model, prompt, max_tokens):
     try:
         r = requests.post("https://api.groq.com/openai/v1/chat/completions",
-                          json={"model": "llama-3.3-70b-versatile",
+                          json={"model": model,
                                 "messages": [{"role": "user", "content": prompt}],
                                 "max_tokens": max_tokens, "temperature": 0.7},
                           headers={"Authorization": f"Bearer {GROQ_KEY}"}, timeout=90)
         if r.status_code != 200:
-            print(f"Groq {r.status_code}: {r.text[:150]}", flush=True)
+            print(f"Groq({model}) {r.status_code}", flush=True)
             return None
         return r.json()["choices"][0]["message"]["content"].strip() or None
     except Exception as e:
-        print("Groq 예외:", type(e).__name__, flush=True)
+        print(f"Groq({model}) 예외:", type(e).__name__, flush=True)
         return None
 
 
-def _gemini(prompt, max_tokens):
+def _gemini(model, prompt, max_tokens):
     key = os.environ.get("GEMINI_API_KEY")
     if not key:
         return None
     try:
         r = requests.post(
-            "https://generativelanguage.googleapis.com/v1beta/models/"
-            f"gemini-2.0-flash:generateContent?key={key}",
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}",
             json={"contents": [{"parts": [{"text": prompt}]}],
                   "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.7}},
             timeout=90)
         if r.status_code != 200:
-            print(f"Gemini {r.status_code}: {r.text[:150]}", flush=True)
+            print(f"Gemini({model}) {r.status_code}", flush=True)
             return None
         cands = r.json().get("candidates") or []
         parts = (cands[0].get("content", {}).get("parts") or []) if cands else []
         return (parts[0].get("text", "").strip() or None) if parts else None
     except Exception as e:
-        print("Gemini 예외:", type(e).__name__, flush=True)
+        print(f"Gemini({model}) 예외:", type(e).__name__, flush=True)
         return None
 
 
+CHAIN = [
+    lambda p, m: _groq("llama-3.3-70b-versatile", p, m),   # 1순위: 품질 최고
+    lambda p, m: _groq("llama-3.1-8b-instant", p, m),      # 2순위: 별도 쿼터
+    lambda p, m: _gemini("gemini-2.0-flash", p, m),        # 3순위
+    lambda p, m: _gemini("gemini-2.0-flash-lite", p, m),   # 4순위: 별도 쿼터
+]
+
+
 def llm(prompt, max_tokens=2500):
-    for attempt in range(4):
-        out = _groq(prompt, max_tokens)
-        if out:
-            return out
-        print("⏳ Groq 실패 → Gemini 폴백", flush=True)
-        out = _gemini(prompt, max_tokens)
-        if out:
-            return out
-        wait = 20 * (attempt + 1)
-        print(f"⏳ 양쪽 실패 — {wait}초 대기 ({attempt + 1}/4)", flush=True)
+    for attempt in range(3):
+        for call in CHAIN:
+            out = call(prompt, max_tokens)
+            if out:
+                return out
+        wait = 30 * (attempt + 1)
+        print(f"⏳ 전 모델 한도 — {wait}초 대기 ({attempt + 1}/3)", flush=True)
         time.sleep(wait)
-    raise Exception("모든 LLM 실패 — 다음 스케줄에서 재시도")
+    raise Exception("모든 LLM 한도 — 다음 스케줄에서 재시도")
 
 
 CATEGORIES = ["IT·테크", "연예·문화", "스포츠", "경제·비즈니스", "사회·이슈", "라이프"]
@@ -139,7 +143,7 @@ def clean_title(title, fallback):
     return title[:40]
 
 
-# ── Writer: 호출 2회(초안 → 퇴고+제목 동시) — 기존 3회에서 33% 절감 ──
+# ── Writer: 호출 2회(초안 → 퇴고+제목 동시) ──
 def write_post(t):
     draft = llm(f"토픽: {t['topic']}\n배경: {t['snippet']}\n카테고리: {t['category']}\n\n"
                 "한국 독자용 고품질 블로그 글 초안. 분량 800~1000자 내외. "
@@ -196,14 +200,14 @@ def main():
         report = []
         for i, t in enumerate(picked):
             if i:
-                time.sleep(20)                    # 글 사이 간격 → TPM 분산
+                time.sleep(20)                    # 글 사이 간격 → 분당 한도 분산
             try:
                 title, body = write_post(t)
                 if not qa_ok(body):
                     title, body = write_post(t)
                 if not qa_ok(body):
                     notify(f"⚠️ 품질 미달 제외: {t['topic']}")
-                    continue                       # 불량 글은 게시 안 함
+                    continue
                 body = inject_monetize(body, t["category"], t["topic"])
 
                 chans = ["GitHub"]
