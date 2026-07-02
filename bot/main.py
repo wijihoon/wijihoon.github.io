@@ -5,8 +5,8 @@ import os
 import re
 import requests
 import sys
-import traceback
 import time
+import traceback
 from datetime import datetime, timezone, timedelta
 
 from channels import inject_monetize, publish_blogger, publish_naver, publish_devto
@@ -62,13 +62,13 @@ def llm(prompt, max_tokens=2500):
         "max_tokens": max_tokens,
         "temperature": 0.7,
     }
-    for attempt in range(6):                       # 최대 6회 재시도
+    for attempt in range(6):  # 최대 6회 재시도
         resp = requests.post(url, json=payload, headers=headers, timeout=90)
 
-        if resp.status_code == 429:                # 분당 한도 → 기다렸다 재시도
+        if resp.status_code == 429:  # 분당 한도 → 기다렸다 재시도
             m = re.search(r"try again in ([\d.]+)s", resp.text)
             wait = float(m.group(1)) + 1 if m else 15 * (attempt + 1)
-            print(f"⏳ 한도 도달 — {wait:.0f}초 대기 후 재시도 ({attempt+1}/6)")
+            print(f"⏳ 한도 도달 — {wait:.0f}초 대기 후 재시도 ({attempt + 1}/6)")
             time.sleep(min(wait, 60))
             continue
 

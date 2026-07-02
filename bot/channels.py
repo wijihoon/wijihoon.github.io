@@ -58,14 +58,6 @@ def coupang_box(keyword: str) -> str:
         return ""
 
 
-def adfit_slot(unit: str) -> str:
-    if not unit:
-        return ""
-    return (f'<ins class="kakao_ad_area" style="display:none;" data-ad-unit="{unit}" '
-            'data-ad-width="160" data-ad-height="600"></ins>'
-            '<script type="text/javascript" src="//t1.daumcdn.net/kas/static/ba.min.js" async></script>')
-
-
 def adsense_slot() -> str:
     client = os.environ.get("ADSENSE_CLIENT", "")
     if not client:
@@ -74,13 +66,13 @@ def adsense_slot() -> str:
             'data-ad-format="auto" data-full-width-responsive="true"></ins>'
             "<script>(adsbygoogle=window.adsbygoogle||[]).push({});</script>")
 
-def adfit_slot() -> str:
-    unit = os.environ.get("ADFIT_UNIT", "")
+
+def adfit_slot(unit: str) -> str:
     if not unit:
         return ""
     return (f'<ins class="kakao_ad_area" style="display:none;" data-ad-unit="{unit}" '
-            'data-ad-width="320" data-ad-height="100"></ins>'
-            '<script async src="https://t1.daumcdn.net/kas/static/ba.min.js"></script>')
+            'data-ad-width="160" data-ad-height="600"></ins>'
+            '<script type="text/javascript" src="//t1.daumcdn.net/kas/static/ba.min.js" async></script>')
 
 
 def inject_monetize(body_md: str, category: str, topic: str) -> str:
