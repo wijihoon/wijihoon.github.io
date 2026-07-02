@@ -1,5 +1,20 @@
 title: Daily Trend Blog
 description: 매일 아침 7시, 실시간 인기 토픽을 AI 팀이 자동으로 정리합니다
-theme: minima
 lang: ko
+theme: minima
+url: "https://wijihoon.github.io"
+
+# 클린 URL (/글제목/) — 내부링크·SEO의 전제
+permalink: /:title/
+
+# sitemap.xml, RSS, SEO 메타 자동 생성 (GitHub Pages 기본 지원)
+plugins:
+  - jekyll-feed
+  - jekyll-sitemap
+  - jekyll-seo-tag
+
+# 검색엔진 소유 확인 (등록할 때 발급값 입력)
+google_site_verification: ""
+naver_site_verification: ""
+
 adsense_client: "ca-pub-6340177904204536"

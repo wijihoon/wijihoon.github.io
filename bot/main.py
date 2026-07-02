@@ -1,4 +1,4 @@
-"""자율 트렌드 블로그 팀 v4 — 4단계 LLM 캐스케이드(모델별 쿼터 분산), 사람 개입 0"""
+"""자율 트렌드 블로그 팀 v6 — 채널별 내부링크(상대/절대) + 멀티GEO + SEO + 고품질 2패스"""
 import html
 import json
 import os
@@ -11,16 +11,16 @@ from datetime import datetime, timezone, timedelta
 
 from channels import inject_monetize, publish_blogger, publish_naver, publish_devto
 
-# 설정
 KST = timezone(timedelta(hours=9))
 GROQ_KEY = os.environ["GROQ_API_KEY"]
 WEBHOOK = os.environ.get("DISCORD_WEBHOOK_URL", "")
 MAX_POSTS = int(os.environ.get("MAX_POSTS", "3"))
+GEOS = [g.strip() for g in os.environ.get("GEO", "KR,US").split(",") if g.strip()]
+SITE_URL = "https://wijihoon.github.io"
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8",
     "Referer": "https://trends.google.com/",
 }
 
@@ -35,25 +35,31 @@ def notify(msg):
         print("알림 실패:", e, flush=True)
 
 
-def collect_trends(geo="KR"):
-    try:
-        r = requests.get(f"https://trends.google.com/trending/rss?geo={geo}",
-                         headers=HEADERS, timeout=20)
-        r.raise_for_status()
-        out = []
-        for it in re.findall(r"<item>(.*?)</item>", r.text, re.S):
-            t = re.search(r"<title>(.*?)</title>", it, re.S)
-            d = re.search(r"<ht:news_item_snippet>(.*?)</ht:news_item_snippet>", it, re.S)
-            if t:
-                out.append({"topic": html.unescape(t.group(1).strip()),
+# ───────── Collector: 멀티 GEO 수집 (중복 제거) ─────────
+def collect_trends():
+    out, seen = [], set()
+    for geo in GEOS:
+        try:
+            r = requests.get(f"https://trends.google.com/trending/rss?geo={geo}",
+                             headers=HEADERS, timeout=20)
+            r.raise_for_status()
+            for it in re.findall(r"<item>(.*?)</item>", r.text, re.S):
+                t = re.search(r"<title>(.*?)</title>", it, re.S)
+                d = re.search(r"<ht:news_item_snippet>(.*?)</ht:news_item_snippet>", it, re.S)
+                if not t:
+                    continue
+                topic = html.unescape(t.group(1).strip())
+                if topic.lower() in seen:
+                    continue
+                seen.add(topic.lower())
+                out.append({"topic": topic, "geo": geo,
                             "snippet": html.unescape((d.group(1) if d else "").strip())[:300]})
-        return out[:20]
-    except Exception as e:
-        print("수집 실패:", e, flush=True)
-        return []
+        except Exception as e:
+            print(f"수집 실패({geo}):", type(e).__name__, flush=True)
+    return out[:30]
 
 
-# ───────── LLM 캐스케이드: 모델별로 무료 쿼터가 '따로' 잡히는 점을 활용 ─────────
+# ───────── LLM 캐스케이드 (모델별 무료 쿼터 분산) ─────────
 def _groq(model, prompt, max_tokens):
     try:
         r = requests.post("https://api.groq.com/openai/v1/chat/completions",
@@ -111,14 +117,14 @@ def llm(prompt, max_tokens=2500):
     raise Exception("모든 LLM 한도 — 다음 스케줄에서 재시도")
 
 
-CATEGORIES = ["IT·테크", "연예·문화", "스포츠", "경제·비즈니스", "사회·이슈", "라이프"]
+CATEGORIES = ["IT·테크", "연예·문화", "스포츠", "경제·비즈니스", "사회·이슈", "라이프", "글로벌"]
 
 
 def categorize(trends):
-    listing = "\n".join(f"{i + 1}. {t['topic']} — {t['snippet'][:80]}"
+    listing = "\n".join(f"{i + 1}. [{t['geo']}] {t['topic']} — {t['snippet'][:70]}"
                         for i, t in enumerate(trends))
     out = llm(f"토픽을 분류하라. 카테고리: {', '.join(CATEGORIES)}\n{listing}\n\n"
-              'JSON만: [{"idx":1,"category":"IT·테크"}]', 800)
+              'JSON만: [{"idx":1,"category":"IT·테크"}]', 900)
     m = re.search(r"\[.*\]", out, re.S)
     try:
         mapping = json.loads(m.group(0)) if m else []
@@ -129,59 +135,120 @@ def categorize(trends):
         if 0 <= i < len(trends):
             trends[i]["category"] = row.get("category", "사회·이슈")
     for t in trends:
-        t.setdefault("category", "사회·이슈")
+        t.setdefault("category", "글로벌" if t["geo"] != "KR" else "사회·이슈")
     return trends
-
-
-def clean_title(title, fallback):
-    """마크다운/개행/본문조각 제거 — 깨진 제목 방지."""
-    title = re.sub(r"^TITLE\s*[:：]\s*", "", title.strip())
-    title = re.sub(r"[#*`=_\n\r]+", " ", title)
-    title = re.sub(r"\s{2,}", " ", title).strip().strip('"').strip()
-    if not (5 <= len(title) <= 60):
-        return fallback
-    return title[:40]
-
-
-# ── Writer: 호출 2회(초안 → 퇴고+제목 동시) ──
-def write_post(t):
-    draft = llm(f"토픽: {t['topic']}\n배경: {t['snippet']}\n카테고리: {t['category']}\n\n"
-                "한국 독자용 고품질 블로그 글 초안. 분량 800~1000자 내외. "
-                "## 소제목 3개, Q&A 2개 포함. 확인 안 된 사실 단정 금지.")
-    time.sleep(15)
-    final = llm("아래 초안을 시니어 에디터로서 퇴고하라(문장 자연스럽게, 정보 밀도 높게).\n"
-                "출력 형식(다른 말 금지):\n"
-                "첫 줄: TITLE: SEO 제목(25자 내외, 마크다운 금지)\n"
-                "둘째 줄부터: 퇴고된 본문 전체(마크다운 유지)\n\n" + draft, 2000)
-    time.sleep(15)
-    first, _, body = final.partition("\n")
-    title = clean_title(first, fallback=t["topic"][:40])
-    body = body.strip() or final
-    return title, body
-
-
-def qa_ok(body):
-    return len(body) >= 600 and not any(
-        b in body for b in ["죄송", "도와드릴 수 없", "AI 언어 모델", "TITLE:"])
 
 
 def slugify(s):
     return re.sub(r"[^\w가-힣]+", "-", s).strip("-")[:40] or "post"
 
 
-def publish_github(title, body_md, t, now):
-    fname = f"_posts/{now:%Y-%m-%d}-{slugify(t['topic'])}.md"
-    front = (f'---\nlayout: post\ntitle: "{title.replace(chr(34), "")}"\n'
-             f'categories: [{t["category"]}]\ndate: {now:%Y-%m-%d %H:%M:%S} +0900\n---\n\n')
+def already_posted(topic):
+    """과거에 같은 토픽으로 쓴 글이 있으면 스킵 (중복 콘텐츠 SEO 감점 방지)."""
+    slug = slugify(topic)
+    if not os.path.isdir("_posts"):
+        return False
+    return any(slug in f for f in os.listdir("_posts"))
+
+
+def clean_line(prefix, line, fallback=""):
+    v = re.sub(rf"^{prefix}\s*[:：]\s*", "", line.strip())
+    v = re.sub(r"[#*`=_\n\r]+", " ", v)
+    return re.sub(r"\s{2,}", " ", v).strip().strip('"') or fallback
+
+
+# ───────── Writer: 고품질 2패스 + SEO 메타(제목·설명·태그) 동시 생성 ─────────
+def write_post(t):
+    draft = llm(
+        f"토픽: {t['topic']}\n배경: {t['snippet']}\n카테고리: {t['category']}\n\n"
+        "한국 독자용 고품질 블로그 글 초안을 마크다운으로 작성하라.\n"
+        "- 분량 1200~1800자\n"
+        "- 구성: 독자의 궁금증을 짚는 도입 2~3문장 → '**3줄 요약**' 리스트 →\n"
+        "  ## 소제목 3~4개(각각 구체적 정보·수치·맥락) → ## 자주 묻는 질문(Q&A 3개) → 전망 마무리\n"
+        "- 사실 확인이 안 된 내용은 단정하지 말 것('~로 알려졌다/보인다')\n"
+        "- 같은 문장 반복 금지, 광고체 금지", 2500)
+    time.sleep(15)
+    final = llm(
+        "너는 10년차 시니어 에디터다. 아래 초안을 퇴고하라:\n"
+        "- 문장을 자연스럽고 간결하게, 정보 밀도를 높이고 중복 제거\n"
+        "- 소제목이 검색 키워드를 포함하도록 다듬기\n"
+        "- 출력 형식(이 형식 외 다른 말 금지):\n"
+        "TITLE: 검색 키워드가 앞에 오는 매력적인 제목(25~35자, 마크다운 금지)\n"
+        "DESC: 검색결과에 보일 요약 설명(70~110자, 1문장)\n"
+        "TAGS: 관련 키워드 3~5개(쉼표 구분)\n"
+        "---\n"
+        "(퇴고된 본문 전체, 마크다운 유지)\n\n" + draft, 2500)
+    time.sleep(15)
+
+    head, _, body = final.partition("---")
+    title = desc = tags = ""
+    for ln in head.splitlines():
+        s = ln.strip()
+        if s.upper().startswith("TITLE"):
+            title = clean_line("TITLE", s)
+        elif s.upper().startswith("DESC"):
+            desc = clean_line("DESC", s)
+        elif s.upper().startswith("TAGS"):
+            tags = clean_line("TAGS", s)
+    body = body.strip() or final
+    if not (5 <= len(title) <= 60):
+        title = t["topic"][:40]
+    if not desc:
+        desc = re.sub(r"[#*`\n]+", " ", body)[:100].strip()
+    tags = ", ".join(x.strip() for x in tags.split(",") if x.strip())[:80] or t["category"]
+    return title, desc, tags, body
+
+
+def qa_ok(body):
+    return (len(body) >= 800 and body.count("##") >= 3
+            and not any(b in body for b in ["죄송", "도와드릴 수 없", "AI 언어 모델", "TITLE:"]))
+
+
+# ───────── 내부/외부 링크: 같은 카테고리 최신 글 3개 ─────────
+# absolute=False → GitHub 글용 상대경로(/슬러그/)
+# absolute=True  → 외부 채널(Blogger 등)용 전체 URL — 메인 블로그로 트래픽 순환
+def related_links(category, current_slug, absolute=False):
+    if not os.path.isdir("_posts"):
+        return ""
+    base = SITE_URL if absolute else ""
+    links = []
+    for f in sorted(os.listdir("_posts"), reverse=True):
+        if current_slug in f or not f.endswith(".md"):
+            continue
+        try:
+            head = open(os.path.join("_posts", f), encoding="utf-8").read(400)
+        except Exception:
+            continue
+        if f"categories: [{category}]" not in head:
+            continue
+        m = re.search(r'title:\s*"(.*?)"', head)
+        slug = re.sub(r"^\d{4}-\d{2}-\d{2}-", "", f)[:-3]
+        if m:
+            links.append(f"- [{m.group(1)}]({base}/{slug}/)")
+        if len(links) >= 3:
+            break
+    if not links:
+        return ""
+    return "\n\n---\n\n### 📚 함께 읽으면 좋은 글\n" + "\n".join(links)
+
+
+def publish_github(title, desc, tags, body_md, t, now):
+    slug = slugify(t["topic"])
+    fname = f"_posts/{now:%Y-%m-%d}-{slug}.md"
+    front = ("---\n"
+             f'layout: post\ntitle: "{title.replace(chr(34), "")}"\n'
+             f'description: "{desc.replace(chr(34), "")}"\n'
+             f'categories: [{t["category"]}]\ntags: [{tags}]\n'
+             f"date: {now:%Y-%m-%d %H:%M:%S} +0900\n---\n\n")
     os.makedirs("_posts", exist_ok=True)
     with open(fname, "w", encoding="utf-8") as f:
-        f.write(front + body_md + "\n")
+        f.write(front + body_md + related_links(t["category"], slug) + "\n")
     return fname
 
 
 def main():
     now = datetime.now(KST)
-    notify(f"🚀 **InsightDaily 봇 시작** — {now:%Y-%m-%d %H:%M} KST")
+    notify(f"🚀 **InsightDaily 봇 시작** — {now:%Y-%m-%d %H:%M} KST · GEO={','.join(GEOS)}")
     try:
         trends = collect_trends()
         if not trends:
@@ -191,6 +258,8 @@ def main():
 
         seen, picked = set(), []
         for t in trends:
+            if already_posted(t["topic"]):
+                continue
             if t["category"] not in seen:
                 picked.append(t)
                 seen.add(t["category"])
@@ -202,21 +271,27 @@ def main():
             if i:
                 time.sleep(20)                    # 글 사이 간격 → 분당 한도 분산
             try:
-                title, body = write_post(t)
+                title, desc, tags, body = write_post(t)
                 if not qa_ok(body):
-                    title, body = write_post(t)
+                    title, desc, tags, body = write_post(t)
                 if not qa_ok(body):
                     notify(f"⚠️ 품질 미달 제외: {t['topic']}")
                     continue
-                body = inject_monetize(body, t["category"], t["topic"])
 
+                body_m = inject_monetize(body, t["category"], t["topic"])
+                slug = slugify(t["topic"])
+
+                # ① GitHub: 상대경로 내부링크 (publish_github 내부에서 추가)
                 chans = ["GitHub"]
-                publish_github(title, body, t, now)
+                publish_github(title, desc, tags, body_m, t, now)
+
+                # ② 외부 채널: 절대주소 링크 → 메인 블로그로 트래픽 순환 + 백링크
+                body_ext = body_m + related_links(t["category"], slug, absolute=True)
                 for name, fn in (("Blogger", publish_blogger),
                                  ("Naver", publish_naver),
                                  ("dev.to", publish_devto)):
                     try:
-                        if fn(title, body, t["category"]):
+                        if fn(title, body_ext, t["category"]):
                             chans.append(name)
                     except Exception as e:
                         print(f"{name} 실패: {type(e).__name__}", flush=True)
