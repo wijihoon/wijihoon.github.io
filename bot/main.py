@@ -62,7 +62,20 @@ def llm(prompt, max_tokens=2500):
         "temperature": 0.7
     }
     resp = requests.post(url, json=payload, headers=headers, timeout=90)
-    return resp.json()["choices"][0]["message"]["content"].strip()
+
+    # 1. 응답 상태 코드 확인
+    if resp.status_code != 200:
+        print(f"LLM API 에러 ({resp.status_code}): {resp.text}")
+        raise Exception(f"Groq API 오류: {resp.text}")
+
+    data = resp.json()
+
+    # 2. 'choices' 키가 있는지 확인
+    if "choices" not in data:
+        print(f"API 응답 구조 이상: {data}")
+        raise KeyError(f"API 응답에서 'choices'를 찾을 수 없음: {data}")
+
+    return data["choices"][0]["message"]["content"].strip()
 
 
 CATEGORIES = ["IT·테크", "연예·문화", "스포츠", "경제·비즈니스", "사회·이슈", "라이프"]
