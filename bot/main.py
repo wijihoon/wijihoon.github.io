@@ -6,7 +6,7 @@ import re
 import requests
 import sys
 import traceback
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, time
 
 from channels import inject_monetize, publish_blogger, publish_naver, publish_devto
 
@@ -98,10 +98,20 @@ def categorize(trends):
 
 
 def write_post(t):
+    # 초안 생성
     draft = llm(f"토픽: {t['topic']}\n배경: {t['snippet']}\n카테고리: {t['category']}\n\n"
-                "고품질 블로그 글 작성. ## 소제목 3개, Q&A 2개 포함, 제목 없이 본문만.")
-    final = llm("퇴고하라:\n" + draft, 2500)
-    title = llm(f"SEO 최적화 한국어 제목 1개(25자 내외):\n{final[:500]}", 60)
+                "한국 독자용 고품질 블로그 글 초안. 분량 800~1000자 내외. ## 소제목 3개, Q&A 2개 포함.")
+
+    # 2초 휴식
+    time.sleep(2)
+
+    # 퇴고
+    final = llm("아래 초안을 시니어 에디터로서 퇴고하라 (문장 자연스럽게, 전체 글만 출력):\n" + draft, 1500)
+
+    # 2초 휴식
+    time.sleep(2)
+
+    title = llm(f"제목 1개(25자 내외):\n{final[:500]}", 60)
     return title.strip().strip('"'), final
 
 
