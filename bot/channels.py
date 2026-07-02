@@ -66,6 +66,14 @@ def adfit_slot(unit: str) -> str:
             '<script type="text/javascript" src="//t1.daumcdn.net/kas/static/ba.min.js" async></script>')
 
 
+def adsense_slot() -> str:
+    client = os.environ.get("ADSENSE_CLIENT", "")
+    if not client:
+        return ""
+    return (f'<ins class="adsbygoogle" style="display:block" data-ad-client="{client}" '
+            'data-ad-format="auto" data-full-width-responsive="true"></ins>'
+            "<script>(adsbygoogle=window.adsbygoogle||[]).push({});</script>")
+
 def adfit_slot() -> str:
     unit = os.environ.get("ADFIT_UNIT", "")
     if not unit:
