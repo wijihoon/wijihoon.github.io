@@ -1,0 +1,6 @@
+title: Daily Trend Blog
+description: 매일 아침 7시, 실시간 인기 토픽을 AI 팀이 자동으로 정리합니다
+theme: minima
+lang: ko
+# 애드센스 승인 후 발급 ID 입력 (예: ca-pub-1234567890)
+adsense_client: ""
