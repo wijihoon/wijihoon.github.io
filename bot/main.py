@@ -60,23 +60,28 @@ def llm(prompt, max_tokens=2500):
         "model": "llama-3.3-70b-versatile",
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": max_tokens,
-        "temperature": 0.7
+        "temperature": 0.7,
     }
-    resp = requests.post(url, json=payload, headers=headers, timeout=90)
+    for attempt in range(6):                       # 최대 6회 재시도
+        resp = requests.post(url, json=payload, headers=headers, timeout=90)
 
-    # 1. 응답 상태 코드 확인
-    if resp.status_code != 200:
-        print(f"LLM API 에러 ({resp.status_code}): {resp.text}")
-        raise Exception(f"Groq API 오류: {resp.text}")
+        if resp.status_code == 429:                # 분당 한도 → 기다렸다 재시도
+            m = re.search(r"try again in ([\d.]+)s", resp.text)
+            wait = float(m.group(1)) + 1 if m else 15 * (attempt + 1)
+            print(f"⏳ 한도 도달 — {wait:.0f}초 대기 후 재시도 ({attempt+1}/6)")
+            time.sleep(min(wait, 60))
+            continue
 
-    data = resp.json()
+        if resp.status_code != 200:
+            print(f"LLM API 에러 ({resp.status_code}): {resp.text}")
+            raise Exception(f"Groq API 오류: {resp.text}")
 
-    # 2. 'choices' 키가 있는지 확인
-    if "choices" not in data:
-        print(f"API 응답 구조 이상: {data}")
-        raise KeyError(f"API 응답에서 'choices'를 찾을 수 없음: {data}")
+        data = resp.json()
+        if "choices" not in data:
+            raise KeyError(f"API 응답 구조 이상: {data}")
+        return data["choices"][0]["message"]["content"].strip()
 
-    return data["choices"][0]["message"]["content"].strip()
+    raise Exception("Groq 한도 재시도 6회 초과 — 다음 실행에서 재시도")
 
 
 CATEGORIES = ["IT·테크", "연예·문화", "스포츠", "경제·비즈니스", "사회·이슈", "라이프"]
