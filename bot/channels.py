@@ -58,13 +58,12 @@ def coupang_box(keyword: str) -> str:
         return ""
 
 
-def adsense_slot() -> str:
-    client = os.environ.get("ADSENSE_CLIENT", "")
-    if not client:
+def adfit_slot(unit: str) -> str:
+    if not unit:
         return ""
-    return (f'<ins class="adsbygoogle" style="display:block" data-ad-client="{client}" '
-            'data-ad-format="auto" data-full-width-responsive="true"></ins>'
-            "<script>(adsbygoogle=window.adsbygoogle||[]).push({});</script>")
+    return (f'<ins class="kakao_ad_area" style="display:none;" data-ad-unit="{unit}" '
+            'data-ad-width="160" data-ad-height="600"></ins>'
+            '<script type="text/javascript" src="//t1.daumcdn.net/kas/static/ba.min.js" async></script>')
 
 
 def adfit_slot() -> str:
@@ -77,14 +76,18 @@ def adfit_slot() -> str:
 
 
 def inject_monetize(body_md: str, category: str, topic: str) -> str:
-    """애드센스=본문 중간, 애드핏=본문 2/3 지점, 쿠팡=하단. 있는 것만 삽입."""
+    """애드센스=본문 중간, 애드핏1=본문 2/3, 애드핏2=본문 끝, 쿠팡=최하단."""
     paras = body_md.split("\n\n")
-    g, k = adsense_slot(), adfit_slot()
-    if k:
-        paras.insert(max(1, len(paras) * 2 // 3), k)
+    g = adsense_slot()
+    k1 = adfit_slot(os.environ.get("ADFIT_UNIT", ""))
+    k2 = adfit_slot(os.environ.get("ADFIT_UNIT2", ""))
+    if k1:
+        paras.insert(max(1, len(paras) * 2 // 3), k1)
     if g:
         paras.insert(max(1, len(paras) // 2), g)
     body_md = "\n\n".join(paras)
+    if k2:
+        body_md += "\n\n" + k2
     body_md += coupang_box(topic if len(topic) < 20 else category)
     return body_md
 
