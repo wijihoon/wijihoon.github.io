@@ -13,14 +13,22 @@ def notify(msg):
     print(msg)
     if not WEBHOOK: return
     try:
-        # User-Agent 헤더 추가
+        # 데이터 준비
+        payload = json.dumps({"content": msg[:1900]}).encode('utf-8')
+
+        # 헤더 설정
         headers = {
             "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
         }
-        req = urllib.request.Request(WEBHOOK, data=json.dumps({"content": msg[:1900]}, headers=headers).encode(),
-                                     headers={"Content-Type": "application/json"})
-        urllib.request.urlopen(req, timeout=10)
+
+        # Request 객체 생성 (순서: url, data, headers)
+        req = urllib.request.Request(WEBHOOK, data=payload, headers=headers)
+
+        # 요청 실행
+        with urllib.request.urlopen(req, timeout=10) as response:
+            pass
+
     except Exception as e:
         print("알림 실패:", e)
 
