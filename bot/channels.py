@@ -1,14 +1,23 @@
-"""다채널 게시 + 수익화 + 이미지. 시크릿 없는 기능은 자동 스킵."""
+"""다채널 게시 + 수익화 + 이미지 v9 — 브라우저 UA(Cloudflare 1010 해결), dev.to/Hashnode 광고 제거"""
 import hashlib
 import hmac
 import json
 import os
 import re
+import urllib.error
 import urllib.parse
 import urllib.request
-import urllib.error
 from datetime import datetime, timezone
 
+# Cloudflare가 파이썬 기본 UA를 차단(error 1010) → 모든 요청에 브라우저 UA
+UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+      "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+
+
+def _req(url, data=None, headers=None):
+    h = {"User-Agent": UA}
+    h.update(headers or {})
+    return urllib.request.Request(url, data=data, headers=h)
 
 
 def _post(url, data=None, headers=None, form=False):
@@ -16,17 +25,16 @@ def _post(url, data=None, headers=None, form=False):
         data = json.dumps(data).encode()
     elif isinstance(data, dict):
         data = urllib.parse.urlencode(data).encode()
-    req = urllib.request.Request(url, data=data, headers=headers or {})
     try:
-        return json.loads(urllib.request.urlopen(req, timeout=30).read().decode())
+        return json.loads(urllib.request.urlopen(_req(url, data, headers), timeout=30).read().decode())
     except urllib.error.HTTPError as e:
         print(f"HTTP {e.code} @ {url[:60]}: {e.read().decode()[:200]}", flush=True)
         raise
 
+
 def _get(url, headers=None):
-    req = urllib.request.Request(url, headers=headers or {})
     try:
-        return json.loads(urllib.request.urlopen(req, timeout=20).read().decode())
+        return json.loads(urllib.request.urlopen(_req(url, None, headers), timeout=20).read().decode())
     except urllib.error.HTTPError as e:
         print(f"HTTP {e.code} @ {url[:60]}: {e.read().decode()[:200]}", flush=True)
         raise
@@ -47,13 +55,20 @@ def md2html(md: str) -> str:
     return "\n".join(paras)
 
 
-# ═══════ 이미지: Pexels 1순위 → Unsplash 폴백 (기존 사진, 출처 표기) ═══════
+def strip_html_ads(md: str) -> str:
+    """dev.to/Hashnode용: 광고 HTML 제거한 순수 마크다운."""
+    md = re.sub(r"<script.*?</script>", "", md, flags=re.S)
+    md = re.sub(r"<ins .*?</ins>", "", md, flags=re.S)
+    md = re.sub(r"<hr>|</?p[^>]*>", "", md)
+    return re.sub(r"\n{3,}", "\n\n", md).strip()
+
+
+# ═══════ 이미지: Pexels → Unsplash 폴백 ═══════
 def fetch_image(query_en: str):
-    """(image_url, credit_md) 또는 (None, '')"""
     px = os.environ.get("PEXELS_API_KEY")
     if px:
         try:
-            q = urllib.parse.quote(query_en)
+            q = urllib.parse.quote((query_en or "")[:60])
             d = _get(f"https://api.pexels.com/v1/search?query={q}&per_page=3&orientation=landscape",
                      {"Authorization": px})
             ph = (d.get("photos") or [None])[0]
@@ -61,23 +76,24 @@ def fetch_image(query_en: str):
                 return (ph["src"]["large"],
                         f"*사진: [{ph['photographer']}]({ph['url']}) / Pexels*")
         except Exception as e:
-            print("Pexels 스킵:", type(e).__name__)
+            print("Pexels 스킵:", type(e).__name__, flush=True)
     un = os.environ.get("UNSPLASH_ACCESS_KEY")
     if un:
         try:
-            q = urllib.parse.quote(query_en)
+            q = urllib.parse.quote((query_en or "")[:60])
             d = _get(f"https://api.unsplash.com/search/photos?query={q}&per_page=3&client_id={un}")
             r = (d.get("results") or [None])[0]
             if r:
-                try:  # Unsplash API 가이드라인: 다운로드 트리거
-                    urllib.request.urlopen(r["links"]["download_location"] + f"&client_id={un}", timeout=10)
+                try:
+                    urllib.request.urlopen(
+                        _req(r["links"]["download_location"] + f"&client_id={un}"), timeout=10)
                 except Exception:
                     pass
                 name = r["user"]["name"]
                 return (r["urls"]["regular"],
                         f"*Photo by [{name}]({r['user']['links']['html']}) on Unsplash*")
         except Exception as e:
-            print("Unsplash 스킵:", type(e).__name__)
+            print("Unsplash 스킵:", type(e).__name__, flush=True)
     return None, ""
 
 
@@ -103,21 +119,18 @@ def coupang_box(keyword: str) -> str:
                                                               '<p style="font-size:12px;color:#888">이 포스팅은 쿠팡 파트너스 활동의 일환으로, '
                                                               "이에 따른 일정액의 수수료를 제공받습니다.</p>")
     except Exception as e:
-        print("쿠팡 스킵:", type(e).__name__)
+        print("쿠팡 스킵:", type(e).__name__, flush=True)
         return ""
 
 
 def amazon_box(keyword_en: str) -> str:
-    """Amazon Associates 검색 링크 (API 불필요 — 태그만으로 시작)."""
     tag = os.environ.get("AMAZON_TAG", "")
     if not tag:
         return ""
-    q = urllib.parse.quote(keyword_en)
-    return ("\n\n<hr>\n"
-            f'🛒 <a href="https://www.amazon.com/s?k={q}&tag={tag}" target="_blank" '
-            f'rel="nofollow sponsored">Explore related products on Amazon</a>\n\n'
-            '<p style="font-size:12px;color:#888">As an Amazon Associate I earn from '
-            "qualifying purchases.</p>")
+    q = urllib.parse.quote((keyword_en or "trending")[:60])
+    return ("\n\n---\n"
+            f"🛒 [Explore related products on Amazon](https://www.amazon.com/s?k={q}&tag={tag})\n\n"
+            "*As an Amazon Associate I earn from qualifying purchases.*")
 
 
 def adsense_slot() -> str:
@@ -138,7 +151,6 @@ def adfit_slot(unit: str) -> str:
 
 
 def inject_monetize(body_md: str, category: str, topic: str) -> str:
-    """[한국어] 애드센스=중간, 애드핏1=2/3, 애드핏2=끝, 쿠팡=최하단."""
     paras = body_md.split("\n\n")
     g = adsense_slot()
     k1 = adfit_slot(os.environ.get("ADFIT_UNIT", ""))
@@ -155,7 +167,6 @@ def inject_monetize(body_md: str, category: str, topic: str) -> str:
 
 
 def inject_monetize_en(body_md: str, keyword_en: str) -> str:
-    """[영어] 애드센스=중간, Amazon=하단."""
     paras = body_md.split("\n\n")
     g = adsense_slot()
     if g:
@@ -190,19 +201,12 @@ def publish_naver(title, body_md, category):
         return None
     q = urllib.parse.urlencode({"grant_type": "refresh_token", "client_id": cid,
                                 "client_secret": csec, "refresh_token": rtok})
-    tok = json.loads(urllib.request.urlopen(
-        f"https://nid.naver.com/oauth2.0/token?{q}", timeout=20).read().decode())["access_token"]
+    tok = _get(f"https://nid.naver.com/oauth2.0/token?{q}")["access_token"]
     res = _post("https://openapi.naver.com/blog/writePost.json",
                 {"title": title, "contents": md2html(body_md)},
                 {"Authorization": f"Bearer {tok}"}, form=True)
     return "네이버 게시 OK" if res else None
 
-
-def strip_html_ads(md):
-    md = re.sub(r"<script.*?</script>", "", md, flags=re.S)
-    md = re.sub(r"<ins .*?</ins>", "", md, flags=re.S)
-    md = re.sub(r"<hr>|</?p[^>]*>", "", md)
-    return re.sub(r"\n{3,}", "\n\n", md).strip()
 
 def publish_devto(title, body_md, category):
     key = os.environ.get("DEVTO_API_KEY")
@@ -221,7 +225,8 @@ def publish_hashnode(title, body_md, category):
         return None
     gql = {"query": """mutation($input: PublishPostInput!) {
              publishPost(input: $input) { post { url } } }""",
-           "variables": {"input": {"title": title, "contentMarkdown": body_md,
+           "variables": {"input": {"title": title,
+                                   "contentMarkdown": strip_html_ads(body_md),
                                    "publicationId": pub}}}
     res = _post("https://gql.hashnode.com", gql,
                 {"Authorization": tok, "Content-Type": "application/json"})
@@ -237,5 +242,5 @@ def telegram_broadcast(text):
               {"chat_id": chat, "text": text, "disable_web_page_preview": False})
         return True
     except Exception as e:
-        print("Telegram 스킵:", type(e).__name__)
+        print("Telegram 스킵:", type(e).__name__, flush=True)
         return None

@@ -134,7 +134,7 @@ def _gemini(model, prompt, max_tokens):
 CHAIN = [
     # Cerebras: 무료 한도 압도적(일 1만+ 요청) — 1순위
     lambda p, m: _chat("https://api.cerebras.ai/v1/chat/completions",
-                       ENV("CEREBRAS_API_KEY"), "llama-3.3-70b", p, m),
+                       ENV("CEREBRAS_API_KEY"), "llama3.3-70b", p, m),
     lambda p, m: _chat("https://api.groq.com/openai/v1/chat/completions",
                        GROQ_KEY, "llama-3.3-70b-versatile", p, m),
     lambda p, m: _chat("https://api.mistral.ai/v1/chat/completions",
