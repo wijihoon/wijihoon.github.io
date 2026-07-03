@@ -6,7 +6,9 @@ import os
 import re
 import urllib.parse
 import urllib.request
+import urllib.error
 from datetime import datetime, timezone
+
 
 
 def _post(url, data=None, headers=None, form=False):
@@ -15,12 +17,19 @@ def _post(url, data=None, headers=None, form=False):
     elif isinstance(data, dict):
         data = urllib.parse.urlencode(data).encode()
     req = urllib.request.Request(url, data=data, headers=headers or {})
-    return json.loads(urllib.request.urlopen(req, timeout=30).read().decode())
-
+    try:
+        return json.loads(urllib.request.urlopen(req, timeout=30).read().decode())
+    except urllib.error.HTTPError as e:
+        print(f"HTTP {e.code} @ {url[:60]}: {e.read().decode()[:200]}", flush=True)
+        raise
 
 def _get(url, headers=None):
     req = urllib.request.Request(url, headers=headers or {})
-    return json.loads(urllib.request.urlopen(req, timeout=20).read().decode())
+    try:
+        return json.loads(urllib.request.urlopen(req, timeout=20).read().decode())
+    except urllib.error.HTTPError as e:
+        print(f"HTTP {e.code} @ {url[:60]}: {e.read().decode()[:200]}", flush=True)
+        raise
 
 
 def md2html(md: str) -> str:
@@ -189,14 +198,19 @@ def publish_naver(title, body_md, category):
     return "네이버 게시 OK" if res else None
 
 
+def strip_html_ads(md):
+    md = re.sub(r"<script.*?</script>", "", md, flags=re.S)
+    md = re.sub(r"<ins .*?</ins>", "", md, flags=re.S)
+    md = re.sub(r"<hr>|</?p[^>]*>", "", md)
+    return re.sub(r"\n{3,}", "\n\n", md).strip()
+
 def publish_devto(title, body_md, category):
     key = os.environ.get("DEVTO_API_KEY")
     if not key:
         return None
-    tags = [re.sub(r"[^a-z0-9]", "", w.lower()) for w in ["trends", category]][:4]
     res = _post("https://dev.to/api/articles",
-                {"article": {"title": title, "body_markdown": body_md,
-                             "published": True, "tags": [t for t in tags if t] or ["trends"]}},
+                {"article": {"title": title, "body_markdown": strip_html_ads(body_md),
+                             "published": True, "tags": ["trends", "news"]}},
                 {"api-key": key, "Content-Type": "application/json"})
     return res.get("url")
 
