@@ -1,4 +1,4 @@
-"""자율 트렌드 블로그 팀 v7 — 이미지(스톡)·영어 채널·글로벌 수익화 추가"""
+"""자율 트렌드 블로그 팀 v8 — 제목/본문 정화·관대한 파서·채널 상태 보고"""
 import html
 import json
 import os
@@ -19,7 +19,7 @@ WEBHOOK = os.environ.get("DISCORD_WEBHOOK_URL", "")
 MAX_POSTS = int(os.environ.get("MAX_POSTS", "3"))
 GEOS = [g.strip() for g in os.environ.get("GEO", "KR,US").split(",") if g.strip()]
 SITE_URL = "https://wijihoon.github.io"
-EN_ENABLED = os.environ.get("EN_POSTS", "1") == "1"  # 영어 포스트 on/off
+EN_ENABLED = os.environ.get("EN_POSTS", "1") == "1"
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
@@ -36,6 +36,27 @@ def notify(msg):
         requests.post(WEBHOOK, json={"content": msg[:1900]}, timeout=10)
     except Exception as e:
         print("알림 실패:", e, flush=True)
+
+
+def channel_status():
+    """활성/미설정 채널을 시작 알림에 표시 — '왜 안 나갔지?' 방지."""
+    def on(*keys):
+        return all(os.environ.get(k) for k in keys)
+    chans = {
+        "GitHub": True,
+        "Blogger": on("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN", "BLOGGER_BLOG_ID"),
+        "Naver": on("NAVER_CLIENT_ID", "NAVER_CLIENT_SECRET", "NAVER_REFRESH_TOKEN"),
+        "Blogger-EN": on("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN", "BLOGGER_BLOG_ID_EN"),
+        "dev.to": on("DEVTO_API_KEY"),
+        "Hashnode": on("HASHNODE_TOKEN", "HASHNODE_PUB_ID"),
+        "Telegram": on("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"),
+        "이미지": on("PEXELS_API_KEY") or on("UNSPLASH_ACCESS_KEY"),
+        "Amazon": on("AMAZON_TAG"),
+        "쿠팡": on("COUPANG_ACCESS_KEY", "COUPANG_SECRET_KEY"),
+    }
+    ok = [k for k, v in chans.items() if v]
+    off = [k for k, v in chans.items() if not v]
+    return "✅ " + ", ".join(ok) + (f"\n⚪ 미설정: {', '.join(off)}" if off else "")
 
 
 def collect_trends():
@@ -151,91 +172,115 @@ def already_posted(topic):
     return any(slug in f for f in os.listdir("_posts"))
 
 
-def clean_line(prefix, line, fallback=""):
-    v = re.sub(rf"^{prefix}\s*[:：]\s*", "", line.strip())
-    v = re.sub(r"[#*`=_\n\r]+", " ", v)
-    return re.sub(r"\s{2,}", " ", v).strip().strip('"') or fallback
+# ═════════ 정화 로직: 모델이 형식을 어겨도 결과물은 깨끗하게 ═════════
+META_WORDS = ("TITLE", "DESC", "TAGS", "IMGQ", "제목", "클릭을 부르는")
+
+
+def sanitize_body(body):
+    """지시문 에코·메타 라인 제거, 붙어버린 헤딩 분리."""
+    # '#### 소제목'이 문장 중간에 붙은 경우 → 개행으로 분리
+    body = re.sub(r"\s*(#{2,4})\s*", r"\n\n## ", body)      # ####·### → ## 로 통일+분리
+    lines = []
+    for ln in body.splitlines():
+        s = ln.strip()
+        # 메타/지시문 에코 라인 제거
+        if any(s.upper().startswith(w.upper()) or s.startswith(w) for w in META_WORDS):
+            # 단, 실제 소제목(##)은 위 치환에서 이미 처리됨
+            if not s.startswith("##"):
+                continue
+        lines.append(ln)
+    body = "\n".join(lines)
+    body = re.sub(r"\n{3,}", "\n\n", body).strip()
+    return body
+
+
+def extract_title(text, topic):
+    """어디에 있든 TITLE 계열 라인을 찾아내는 관대한 파서 + 폴백 생성."""
+    # 1) TITLE: / 제목: / 클릭을 부르는 제목: 패턴을 전체에서 탐색
+    m = re.search(r"^\s*(?:TITLE|제목|클릭을 부르는 제목[^:：]*)\s*[:：]\s*(.+)$",
+                  text, re.M | re.I)
+    cand = m.group(1) if m else ""
+    cand = re.sub(r"[#*`=_\"']+", " ", cand)
+    cand = re.sub(r"\s{2,}", " ", cand).strip()
+    # 2) 못 찾았거나 이상하면: 첫 문장에서 시도
+    if not (8 <= len(cand) <= 45):
+        first = re.sub(r"[#*`]+", "", text.strip().split("\n")[0])[:60]
+        if 10 <= len(first) <= 45 and ":" not in first[:6]:
+            cand = first.strip()
+    # 3) 최종 폴백: 토픽 기반 자동 제목 (정적이지 않게)
+    if not (8 <= len(cand) <= 45):
+        cand = f"{topic}, 지금 검색량이 급증한 이유"[:40]
+    return cand[:40]
 
 
 def parse_meta(final, topic):
-    """TITLE/DESC/TAGS/IMGQ/---/본문 형식 파싱."""
-    head, _, body = final.partition("---")
-    title = desc = tags = imgq = ""
-    for ln in head.splitlines():
+    head, sep, body = final.partition("---")
+    src = head if sep else final
+    title = extract_title(src, topic)
+    desc = tags = imgq = ""
+    for ln in src.splitlines():
         s = ln.strip()
         u = s.upper()
-        if u.startswith("TITLE"):
-            title = clean_line("TITLE", s)
-        elif u.startswith("DESC"):
-            desc = clean_line("DESC", s)
+        if u.startswith("DESC"):
+            desc = re.sub(r"^DESC\s*[:：]\s*", "", s, flags=re.I).strip()
         elif u.startswith("TAGS"):
-            tags = clean_line("TAGS", s)
+            tags = re.sub(r"^TAGS\s*[:：]\s*", "", s, flags=re.I).strip()
         elif u.startswith("IMGQ"):
-            imgq = clean_line("IMGQ", s)
-    body = body.strip() or final
-    if not (5 <= len(title) <= 70):
-        title = topic[:40]
+            imgq = re.sub(r"^IMGQ\s*[:：]\s*", "", s, flags=re.I).strip()
+    body = sanitize_body(body if sep else final)
     if not desc:
         desc = re.sub(r"[#*`\n]+", " ", body)[:100].strip()
+    desc = re.sub(r"[#*`\"]+", "", desc)[:120]
     tags = ", ".join(x.strip() for x in tags.split(",") if x.strip())[:80]
     return title, desc, tags, imgq, body
 
 
-# ── Writer(한국어): 초안 → 퇴고+메타(+영문 이미지 키워드) ──
 def write_post(t):
     draft = llm(
         f"토픽: {t['topic']}\n배경: {t['snippet']}\n카테고리: {t['category']}\n\n"
         "한국 독자용 고품질 블로그 글 초안을 마크다운으로 작성하라.\n"
         "- 분량 1200~1800자\n"
-        "- 구성: 독자의 궁금증을 짚는 도입 2~3문장 → '**3줄 요약**' 리스트 →\n"
+        "- 구성: 궁금증을 짚는 도입 2~3문장 → '**3줄 요약**' 리스트 →\n"
         "  ## 소제목 3~4개(구체적 정보·수치·맥락) → ## 자주 묻는 질문(Q&A 3개) → 전망 마무리\n"
         "- 확인 안 된 사실 단정 금지('~로 알려졌다/보인다')\n"
         "- 같은 문장 반복 금지, 광고체 금지", 2500)
     time.sleep(15)
     final = llm(
-        "너는 10년차 시니어 에디터다. 아래 초안을 퇴고하라:\n"
-        "- 문장을 자연스럽고 간결하게, 정보 밀도를 높이고 중복 제거\n"
-        "- 소제목이 검색 키워드를 포함하도록 다듬기\n"
-        "- 출력 형식(이 형식 외 다른 말 금지):\n"
-        "TITLE: 클릭을 부르는 제목(25~38자). 다음 기법 중 1개 이상 사용:\n"
-        "  ① 구체적 숫자('3가지 이유', '5분 정리') ② 호기심 갭('~한 진짜 이유', '알고 보니')\n"
-        "  ③ 독자 이득('~하는 법', '놓치면 아쉬운') ④ 대비/반전('예상과 달랐다')\n"
-        "  단, 본문이 실제로 답하는 내용만. 과장·낚시 금지. 핵심 키워드는 제목 앞쪽에.\n"
-        "DESC: 검색결과용 요약(70~110자, 1문장)\n"
-        "TAGS: 관련 키워드 3~5개(쉼표 구분)\n"
-        "IMGQ: 이 주제를 대표하는 사진 검색용 영어 키워드 2~3단어\n"
+        "너는 10년차 시니어 에디터다. 아래 초안을 퇴고하고, 정확히 아래 형식으로만 출력하라.\n"
+        "형식 라벨(TITLE 등)은 그대로 쓰고, 지시문을 되풀이하지 마라.\n\n"
+        "TITLE: (제목만 작성. 25~38자. 숫자·호기심 갭·독자 이득 중 1개 사용. 예: '하이닉스 주가가 갑자기 뛴 3가지 이유'. 과장 금지)\n"
+        "DESC: (검색결과용 요약 1문장, 70~110자)\n"
+        "TAGS: (키워드 3~5개, 쉼표 구분)\n"
+        "IMGQ: (사진 검색용 영어 단어 2~3개)\n"
         "---\n"
-        "(퇴고된 본문 전체, 마크다운 유지)\n\n" + draft, 2500)
+        "(퇴고된 본문 전체. 소제목은 반드시 '## '로 시작하고 앞뒤 빈 줄. 본문에 TITLE/DESC 등 라벨 금지)\n\n"
+        "=== 초안 ===\n" + draft, 2500)
     time.sleep(15)
     return parse_meta(final, t["topic"])
 
 
-# ── Writer(영어): 한국 토픽을 글로벌 독자용으로 재작성 (호출 1회) ──
 def write_post_en(t, body_kr):
     final = llm(
         "You are a senior editor for a global trends blog.\n"
-        f"Topic (trending in Korea/world): {t['topic']}\n"
-        "Rewrite the following Korean article as an original English blog post for "
-        "international readers (not a literal translation — adapt context, add brief "
-        "background a non-Korean reader needs).\n"
-        "800-1200 words is NOT needed; 500-800 words. Use ## subheadings and a short FAQ.\n"
-        "Do not state unverified facts as certain.\n"
-        "Output format (nothing else):\n"
-        "TITLE: A click-worthy English title (50-65 chars). Use one of: a specific number, "
-        "a curiosity gap ('the real reason...'), or a reader benefit ('what it means for you'). "
-        "No clickbait the article can't answer. Keyword near the front.\n"
-        "DESC: one-sentence meta description\n"
-        "TAGS: 3-5 keywords, comma-separated\n"
-        "IMGQ: 2-3 English words for a stock photo search\n"
+        f"Topic (trending now): {t['topic']}\n"
+        "Rewrite the Korean article below as an original English post for international "
+        "readers (adapt, don't translate literally; add brief context non-Korean readers need).\n"
+        "500-800 words, ## subheadings, short FAQ. No unverified facts as certain.\n"
+        "Output EXACTLY this format, no extra words:\n"
+        "TITLE: (title only, 50-65 chars, use a number or curiosity gap, no clickbait)\n"
+        "DESC: (one-sentence meta description)\n"
+        "TAGS: (3-5 keywords, comma-separated)\n"
+        "IMGQ: (2-3 English words for stock photo search)\n"
         "---\n"
-        "(full English article, markdown)\n\n" + body_kr[:4000], 2200)
+        "(full article, markdown, '## ' subheadings on their own lines)\n\n"
+        "=== Korean article ===\n" + body_kr[:4000], 2200)
     time.sleep(15)
     return parse_meta(final, t["topic"])
 
 
 def qa_ok(body):
     return (len(body) >= 800 and body.count("##") >= 3
-            and not any(b in body for b in ["죄송", "도와드릴 수 없", "AI 언어 모델", "TITLE:"]))
+            and not any(b in body for b in ["죄송", "도와드릴 수 없", "AI 언어 모델", "TITLE:", "클릭을 부르는"]))
 
 
 def qa_ok_en(body):
@@ -243,13 +288,11 @@ def qa_ok_en(body):
 
 
 def add_image(body_md, imgq, topic):
-    """본문 도입부 뒤에 스톡 이미지+출처 삽입. (url 반환 — og:image용)"""
     url, credit = fetch_image(imgq or topic)
     if not url:
         return body_md, ""
     paras = body_md.split("\n\n")
-    img_block = f"![{imgq or topic}]({url})\n{credit}"
-    paras.insert(min(1, len(paras)), img_block)
+    paras.insert(min(1, len(paras)), f"![{imgq or topic}]({url})\n{credit}")
     return "\n\n".join(paras), url
 
 
@@ -296,7 +339,8 @@ def publish_github(title, desc, tags, image_url, body_md, t, now):
 
 def main():
     now = datetime.now(KST)
-    notify(f"🚀 **InsightDaily 봇 시작** — {now:%Y-%m-%d %H:%M} KST · GEO={','.join(GEOS)}")
+    notify(f"🚀 **InsightDaily 봇 시작** — {now:%Y-%m-%d %H:%M} KST · GEO={','.join(GEOS)}\n"
+           + channel_status())
     try:
         trends = collect_trends()
         if not trends:
@@ -319,7 +363,6 @@ def main():
             if i:
                 time.sleep(20)
             try:
-                # ── 한국어 파이프라인 ──
                 title, desc, tags, imgq, body = write_post(t)
                 if not qa_ok(body):
                     title, desc, tags, imgq, body = write_post(t)
@@ -342,7 +385,6 @@ def main():
                     except Exception as e:
                         print(f"{name} 실패: {type(e).__name__}", flush=True)
 
-                # ── 영어 파이프라인 (글로벌 채널) ──
                 if EN_ENABLED:
                     try:
                         etitle, edesc, etags, eimgq, ebody = write_post_en(t, body)
@@ -358,8 +400,10 @@ def main():
                                         chans.append(name)
                                 except Exception as e:
                                     print(f"{name} 실패: {type(e).__name__}", flush=True)
+                        else:
+                            print("EN 품질 미달 — 영어 게시 생략", flush=True)
                     except Exception as e:
-                        print("EN 파이프라인 스킵:", type(e).__name__, flush=True)
+                        notify(f"⚠️ EN 파이프라인 실패({t['topic']}): {type(e).__name__}")
 
                 telegram_broadcast(f"📰 {title}\n{gh_url}")
                 report.append(f"· [{t['category']}] {title} → {', '.join(chans)}")
