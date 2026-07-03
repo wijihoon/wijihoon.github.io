@@ -26,9 +26,14 @@ def _post(url, data=None, headers=None, form=False):
     elif isinstance(data, dict):
         data = urllib.parse.urlencode(data).encode()
     try:
-        return json.loads(urllib.request.urlopen(_req(url, data, headers), timeout=30).read().decode())
+        raw = urllib.request.urlopen(_req(url, data, headers), timeout=30).read().decode()
     except urllib.error.HTTPError as e:
         print(f"HTTP {e.code} @ {url[:60]}: {e.read().decode()[:200]}", flush=True)
+        raise
+    try:
+        return json.loads(raw)
+    except Exception:
+        print(f"비JSON 응답 @ {url[:60]}: {raw[:200]}", flush=True)
         raise
 
 
@@ -183,11 +188,25 @@ def publish_blogger(title, body_md, category, blog_env="BLOGGER_BLOG_ID"):
     tok = _post("https://oauth2.googleapis.com/token",
                 {"client_id": cid, "client_secret": csec, "refresh_token": rtok,
                  "grant_type": "refresh_token"}, form=True)["access_token"]
-    res = _post(f"https://www.googleapis.com/blogger/v3/blogs/{blog}/posts/",
-                {"kind": "blogger#post", "title": title,
-                 "content": md2html(body_md), "labels": [category]},
-                {"Authorization": f"Bearer {tok}", "Content-Type": "application/json"})
-    return res.get("url")
+    try:
+        res = _post(f"https://www.googleapis.com/blogger/v3/blogs/{blog}/posts/",
+                    {"kind": "blogger#post", "title": title,
+                     "content": md2html(body_md), "labels": [category]},
+                    {"Authorization": f"Bearer {tok}", "Content-Type": "application/json"})
+        return res.get("url")
+    except urllib.error.HTTPError as e:
+        if e.code == 403:
+            # 자가 진단: 이 토큰으로 접근 가능한 블로그가 뭔지 출력
+            try:
+                mine = _get("https://www.googleapis.com/blogger/v3/users/self/blogs",
+                            {"Authorization": f"Bearer {tok}"})
+                ids = [(b.get("id"), b.get("url")) for b in mine.get("items", [])]
+                print(f"🔎 Blogger 진단 — 토큰이 접근 가능한 블로그: {ids} / 설정된 ID: {blog}", flush=True)
+                print("   → 목록에 설정 ID가 있으면 '스팸 잠금'(Blogger 대시보드에서 검토 요청), "
+                      "없으면 ID 불일치, 목록 조회도 403이면 토큰 스코프 문제", flush=True)
+            except Exception:
+                print("🔎 Blogger 진단 실패 — 토큰 스코프가 blogger 권한을 포함하지 않는 것으로 보임", flush=True)
+        raise
 
 
 def publish_blogger_en(title, body_md, category):
@@ -212,11 +231,19 @@ def publish_devto(title, body_md, category):
     key = os.environ.get("DEVTO_API_KEY")
     if not key:
         return None
-    res = _post("https://dev.to/api/articles",
-                {"article": {"title": title, "body_markdown": strip_html_ads(body_md),
-                             "published": True, "tags": ["trends", "news"]}},
-                {"api-key": key, "Content-Type": "application/json"})
-    return res.get("url")
+    payload = {"article": {"title": title, "body_markdown": strip_html_ads(body_md),
+                           "published": True, "tags": ["trends", "news"]}}
+    hdr = {"api-key": key, "Content-Type": "application/json"}
+    for attempt in range(2):
+        try:
+            return _post("https://dev.to/api/articles", payload, hdr).get("url")
+        except urllib.error.HTTPError as e:
+            if e.code == 429 and attempt == 0:
+                import time as _t
+                print("dev.to 속도제한 — 305초 대기 후 재시도", flush=True)
+                _t.sleep(305)
+                continue
+            raise
 
 
 def publish_hashnode(title, body_md, category):

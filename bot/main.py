@@ -131,10 +131,35 @@ def _gemini(model, prompt, max_tokens):
         return None
 
 
+_CEREBRAS_MODEL = None
+
+
+def _cerebras(prompt, max_tokens):
+    """Cerebras 모델명을 /v1/models에서 조회해 자동 선택 (모델명 변경에 견고)."""
+    global _CEREBRAS_MODEL
+    key = ENV("CEREBRAS_API_KEY")
+    if not key:
+        return None
+    if _CEREBRAS_MODEL is None:
+        try:
+            r = requests.get("https://api.cerebras.ai/v1/models",
+                             headers={"Authorization": f"Bearer {key}"}, timeout=20)
+            ids = [m.get("id", "") for m in r.json().get("data", [])] if r.status_code == 200 else []
+            # 선호 순서: 큰 llama → gpt-oss → qwen → 아무거나
+            pref = [i for i in ids if "70b" in i] + [i for i in ids if "gpt-oss" in i]                  + [i for i in ids if "qwen" in i] + ids
+            _CEREBRAS_MODEL = pref[0] if pref else ""
+            print(f"Cerebras 모델 선택: {_CEREBRAS_MODEL or '(없음)'} / 가용: {ids[:6]}", flush=True)
+        except Exception as e:
+            print("Cerebras 모델 조회 실패:", type(e).__name__, flush=True)
+            _CEREBRAS_MODEL = ""
+    if not _CEREBRAS_MODEL:
+        return None
+    return _chat("https://api.cerebras.ai/v1/chat/completions", key, _CEREBRAS_MODEL, prompt, max_tokens)
+
+
 CHAIN = [
-    # Cerebras: 무료 한도 압도적(일 1만+ 요청) — 1순위
-    lambda p, m: _chat("https://api.cerebras.ai/v1/chat/completions",
-                       ENV("CEREBRAS_API_KEY"), "llama3.3-70b", p, m),
+    # Cerebras: 무료 한도 압도적(일 1만+ 요청) — 1순위, 모델 자동 탐지
+    lambda p, m: _cerebras(p, m),
     lambda p, m: _chat("https://api.groq.com/openai/v1/chat/completions",
                        GROQ_KEY, "llama-3.3-70b-versatile", p, m),
     lambda p, m: _chat("https://api.mistral.ai/v1/chat/completions",
@@ -216,6 +241,8 @@ def extract_title(text, topic):
                   text, re.M | re.I)
     cand = m.group(1) if m else ""
     cand = re.sub(r"[#*`=_\"']+", " ", cand)
+    # 작은 모델 폴백 시 섞이는 한자/키릴 등 이질 문자 제거
+    cand = re.sub(r"[\u4e00-\u9fff\u0400-\u04ff]+", "", cand)
     cand = re.sub(r"\s{2,}", " ", cand).strip()
     if not (8 <= len(cand) <= 45):
         first = re.sub(r"[#*`]+", "", text.strip().split("\n")[0])[:60]
@@ -292,6 +319,8 @@ def write_post_en(t, body_kr):
 
 
 def qa_ok(body):
+    if re.search(r"[\u0400-\u04ff]", body):     # 키릴 문자 오염 = 모델 폭주 신호
+        return False
     return (len(body) >= 800 and body.count("##") >= 3
             and not any(b in body for b in ["죄송", "도와드릴 수 없", "AI 언어 모델", "TITLE:", "클릭을 부르는"]))
 
