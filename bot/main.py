@@ -1,4 +1,4 @@
-"""자율 트렌드 블로그 팀 v8 — 제목/본문 정화·관대한 파서·채널 상태 보고"""
+"""자율 트렌드 블로그 팀 v9 — 6단계 LLM 캐스케이드(Cerebras/Mistral/OpenRouter 추가), 리트라이 축소"""
 import html
 import json
 import os
@@ -20,6 +20,7 @@ MAX_POSTS = int(os.environ.get("MAX_POSTS", "3"))
 GEOS = [g.strip() for g in os.environ.get("GEO", "KR,US").split(",") if g.strip()]
 SITE_URL = "https://wijihoon.github.io"
 EN_ENABLED = os.environ.get("EN_POSTS", "1") == "1"
+ENV = os.environ.get
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
@@ -39,7 +40,6 @@ def notify(msg):
 
 
 def channel_status():
-    """활성/미설정 채널을 시작 알림에 표시 — '왜 안 나갔지?' 방지."""
     def on(*keys):
         return all(os.environ.get(k) for k in keys)
     chans = {
@@ -54,9 +54,18 @@ def channel_status():
         "Amazon": on("AMAZON_TAG"),
         "쿠팡": on("COUPANG_ACCESS_KEY", "COUPANG_SECRET_KEY"),
     }
+    llms = {
+        "Cerebras": on("CEREBRAS_API_KEY"), "Groq": True,
+        "Mistral": on("MISTRAL_API_KEY"), "Gemini": on("GEMINI_API_KEY"),
+        "OpenRouter": on("OPENROUTER_API_KEY"),
+    }
     ok = [k for k, v in chans.items() if v]
     off = [k for k, v in chans.items() if not v]
-    return "✅ " + ", ".join(ok) + (f"\n⚪ 미설정: {', '.join(off)}" if off else "")
+    lok = [k for k, v in llms.items() if v]
+    s = "✅ " + ", ".join(ok) + f"\n🧠 LLM: {', '.join(lok)}"
+    if off:
+        s += f"\n⚪ 미설정: {', '.join(off)}"
+    return s
 
 
 def collect_trends():
@@ -82,24 +91,27 @@ def collect_trends():
     return out[:30]
 
 
-def _groq(model, prompt, max_tokens):
+# ───────── LLM: OpenAI 호환 통합 + 6단계 캐스케이드 ─────────
+def _chat(base, key, model, prompt, max_tokens):
+    if not key:
+        return None
     try:
-        r = requests.post("https://api.groq.com/openai/v1/chat/completions",
-                          json={"model": model,
-                                "messages": [{"role": "user", "content": prompt}],
-                                "max_tokens": max_tokens, "temperature": 0.7},
-                          headers={"Authorization": f"Bearer {GROQ_KEY}"}, timeout=90)
+        r = requests.post(base, json={"model": model,
+                                      "messages": [{"role": "user", "content": prompt}],
+                                      "max_tokens": max_tokens, "temperature": 0.7},
+                          headers={"Authorization": f"Bearer {key}",
+                                   "Content-Type": "application/json"}, timeout=90)
         if r.status_code != 200:
-            print(f"Groq({model}) {r.status_code}", flush=True)
+            print(f"{model} {r.status_code}", flush=True)
             return None
         return r.json()["choices"][0]["message"]["content"].strip() or None
     except Exception as e:
-        print(f"Groq({model}) 예외:", type(e).__name__, flush=True)
+        print(f"{model} 예외: {type(e).__name__}", flush=True)
         return None
 
 
 def _gemini(model, prompt, max_tokens):
-    key = os.environ.get("GEMINI_API_KEY")
+    key = ENV("GEMINI_API_KEY")
     if not key:
         return None
     try:
@@ -115,28 +127,38 @@ def _gemini(model, prompt, max_tokens):
         parts = (cands[0].get("content", {}).get("parts") or []) if cands else []
         return (parts[0].get("text", "").strip() or None) if parts else None
     except Exception as e:
-        print(f"Gemini({model}) 예외:", type(e).__name__, flush=True)
+        print(f"Gemini({model}) 예외: {type(e).__name__}", flush=True)
         return None
 
 
 CHAIN = [
-    lambda p, m: _groq("llama-3.3-70b-versatile", p, m),
-    lambda p, m: _groq("llama-3.1-8b-instant", p, m),
+    # Cerebras: 무료 한도 압도적(일 1만+ 요청) — 1순위
+    lambda p, m: _chat("https://api.cerebras.ai/v1/chat/completions",
+                       ENV("CEREBRAS_API_KEY"), "llama-3.3-70b", p, m),
+    lambda p, m: _chat("https://api.groq.com/openai/v1/chat/completions",
+                       GROQ_KEY, "llama-3.3-70b-versatile", p, m),
+    lambda p, m: _chat("https://api.mistral.ai/v1/chat/completions",
+                       ENV("MISTRAL_API_KEY"), "mistral-small-latest", p, m),
+    lambda p, m: _chat("https://api.groq.com/openai/v1/chat/completions",
+                       GROQ_KEY, "llama-3.1-8b-instant", p, m),
     lambda p, m: _gemini("gemini-2.0-flash", p, m),
-    lambda p, m: _gemini("gemini-2.0-flash-lite", p, m),
+    lambda p, m: _chat("https://openrouter.ai/api/v1/chat/completions",
+                       ENV("OPENROUTER_API_KEY"),
+                       "meta-llama/llama-3.3-70b-instruct:free", p, m),
 ]
 
 
 def llm(prompt, max_tokens=2500):
-    for attempt in range(3):
+    # 리트라이 축소: 캐스케이드 1회 순회 + 실패 시 45초 후 1회만 재순회 (총 2라운드)
+    for attempt in range(2):
         for call in CHAIN:
             out = call(prompt, max_tokens)
             if out:
                 return out
-        wait = 30 * (attempt + 1)
-        print(f"⏳ 전 모델 한도 — {wait}초 대기 ({attempt + 1}/3)", flush=True)
-        time.sleep(wait)
-    raise Exception("모든 LLM 한도 — 다음 스케줄에서 재시도")
+        if attempt == 0:
+            print("⏳ 전 모델 실패 — 45초 후 마지막 재시도", flush=True)
+            time.sleep(45)
+    raise Exception("모든 LLM 실패 — 다음 스케줄에서 재시도")
 
 
 CATEGORIES = ["IT·테크", "연예·문화", "스포츠", "경제·비즈니스", "사회·이슈", "라이프", "글로벌"]
@@ -172,42 +194,33 @@ def already_posted(topic):
     return any(slug in f for f in os.listdir("_posts"))
 
 
-# ═════════ 정화 로직: 모델이 형식을 어겨도 결과물은 깨끗하게 ═════════
+# ═════════ 정화: 모델이 형식을 어겨도 결과물은 깨끗하게 ═════════
 META_WORDS = ("TITLE", "DESC", "TAGS", "IMGQ", "제목", "클릭을 부르는")
 
 
 def sanitize_body(body):
-    """지시문 에코·메타 라인 제거, 붙어버린 헤딩 분리."""
-    # '#### 소제목'이 문장 중간에 붙은 경우 → 개행으로 분리
-    body = re.sub(r"\s*(#{2,4})\s*", r"\n\n## ", body)      # ####·### → ## 로 통일+분리
+    body = re.sub(r"\s*(#{2,4})\s*", r"\n\n## ", body)
     lines = []
     for ln in body.splitlines():
         s = ln.strip()
-        # 메타/지시문 에코 라인 제거
         if any(s.upper().startswith(w.upper()) or s.startswith(w) for w in META_WORDS):
-            # 단, 실제 소제목(##)은 위 치환에서 이미 처리됨
             if not s.startswith("##"):
                 continue
         lines.append(ln)
     body = "\n".join(lines)
-    body = re.sub(r"\n{3,}", "\n\n", body).strip()
-    return body
+    return re.sub(r"\n{3,}", "\n\n", body).strip()
 
 
 def extract_title(text, topic):
-    """어디에 있든 TITLE 계열 라인을 찾아내는 관대한 파서 + 폴백 생성."""
-    # 1) TITLE: / 제목: / 클릭을 부르는 제목: 패턴을 전체에서 탐색
     m = re.search(r"^\s*(?:TITLE|제목|클릭을 부르는 제목[^:：]*)\s*[:：]\s*(.+)$",
                   text, re.M | re.I)
     cand = m.group(1) if m else ""
     cand = re.sub(r"[#*`=_\"']+", " ", cand)
     cand = re.sub(r"\s{2,}", " ", cand).strip()
-    # 2) 못 찾았거나 이상하면: 첫 문장에서 시도
     if not (8 <= len(cand) <= 45):
         first = re.sub(r"[#*`]+", "", text.strip().split("\n")[0])[:60]
         if 10 <= len(first) <= 45 and ":" not in first[:6]:
             cand = first.strip()
-    # 3) 최종 폴백: 토픽 기반 자동 제목 (정적이지 않게)
     if not (8 <= len(cand) <= 45):
         cand = f"{topic}, 지금 검색량이 급증한 이유"[:40]
     return cand[:40]
@@ -244,7 +257,7 @@ def write_post(t):
         "  ## 소제목 3~4개(구체적 정보·수치·맥락) → ## 자주 묻는 질문(Q&A 3개) → 전망 마무리\n"
         "- 확인 안 된 사실 단정 금지('~로 알려졌다/보인다')\n"
         "- 같은 문장 반복 금지, 광고체 금지", 2500)
-    time.sleep(15)
+    time.sleep(10)
     final = llm(
         "너는 10년차 시니어 에디터다. 아래 초안을 퇴고하고, 정확히 아래 형식으로만 출력하라.\n"
         "형식 라벨(TITLE 등)은 그대로 쓰고, 지시문을 되풀이하지 마라.\n\n"
@@ -255,7 +268,7 @@ def write_post(t):
         "---\n"
         "(퇴고된 본문 전체. 소제목은 반드시 '## '로 시작하고 앞뒤 빈 줄. 본문에 TITLE/DESC 등 라벨 금지)\n\n"
         "=== 초안 ===\n" + draft, 2500)
-    time.sleep(15)
+    time.sleep(10)
     return parse_meta(final, t["topic"])
 
 
@@ -274,7 +287,7 @@ def write_post_en(t, body_kr):
         "---\n"
         "(full article, markdown, '## ' subheadings on their own lines)\n\n"
         "=== Korean article ===\n" + body_kr[:4000], 2200)
-    time.sleep(15)
+    time.sleep(10)
     return parse_meta(final, t["topic"])
 
 
@@ -361,11 +374,10 @@ def main():
         report = []
         for i, t in enumerate(picked):
             if i:
-                time.sleep(20)
+                time.sleep(15)
             try:
+                # 리트라이 축소: 품질 미달 시 재작성 없이 제외 (LLM 낭비 방지)
                 title, desc, tags, imgq, body = write_post(t)
-                if not qa_ok(body):
-                    title, desc, tags, imgq, body = write_post(t)
                 if not qa_ok(body):
                     notify(f"⚠️ 품질 미달 제외: {t['topic']}")
                     continue

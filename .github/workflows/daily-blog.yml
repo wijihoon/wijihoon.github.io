@@ -20,8 +20,12 @@ jobs:
       - name: Run agent team
         env:
           PYTHONUNBUFFERED: "1"
+          # LLM (있는 것만 사용 — Cerebras 권장)
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           GEO: "KR,US"
           EN_POSTS: "1"
@@ -38,13 +42,13 @@ jobs:
           ADSENSE_CLIENT: "ca-pub-6340177904204536"
           ADFIT_UNIT: ${{ secrets.ADFIT_UNIT }}
           ADFIT_UNIT2: ${{ secrets.ADFIT_UNIT2 }}
-          # 영어 채널/수익화 (등록하면 자동 활성)
+          # 영어 채널/수익화
           BLOGGER_BLOG_ID_EN: ${{ secrets.BLOGGER_BLOG_ID_EN }}
           DEVTO_API_KEY: ${{ secrets.DEVTO_API_KEY }}
           HASHNODE_TOKEN: ${{ secrets.HASHNODE_TOKEN }}
           HASHNODE_PUB_ID: ${{ secrets.HASHNODE_PUB_ID }}
           AMAZON_TAG: ${{ secrets.AMAZON_TAG }}
-          # 이미지 (스톡 사진)
+          # 이미지
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
           # 배포
