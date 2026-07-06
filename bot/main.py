@@ -228,11 +228,66 @@ def slugify(s):
     return re.sub(r"[^\w가-힣]+", "-", s).strip("-")[:40] or "post"
 
 
-def already_posted(topic):
-    slug = slugify(topic)
+DUP_WINDOW_DAYS = int(os.environ.get("DUP_WINDOW_DAYS", "7"))
+
+
+def _existing_slugs():
+    """{slug: 최근 게시일} — 파일명 YYYY-MM-DD-slug.md 파싱."""
+    out = {}
     if not os.path.isdir("_posts"):
+        return out
+    for f in os.listdir("_posts"):
+        m = re.match(r"(\d{4}-\d{2}-\d{2})-(.+)\.md$", f)
+        if not m:
+            continue
+        d, s = m.group(1), m.group(2)
+        if s not in out or d > out[s]:
+            out[s] = d
+    return out
+
+
+TOPIC_LOG = "_posts/topics.log"
+
+
+def _log_topic(topic, now):
+    os.makedirs("_posts", exist_ok=True)
+    with open(TOPIC_LOG, "a", encoding="utf-8") as f:
+        f.write(f"{now:%Y-%m-%d} {slugify(topic)}\n")
+
+
+def already_posted(topic):
+    """같은 토픽을 '최근 N일 내' 다뤘을 때만 스킵 (topics.log 기준 정확 일치)."""
+    slug = slugify(topic)
+    latest = None
+    if os.path.exists(TOPIC_LOG):
+        for ln in open(TOPIC_LOG, encoding="utf-8"):
+            parts = ln.split()
+            if len(parts) == 2 and parts[1] == slug:
+                latest = max(latest or "", parts[0])
+    # 구버전 호환: 파일명이 한글 슬러그였던 기존 글도 확인
+    latest = max(latest or "", _existing_slugs().get(slug, "")) or None
+    if not latest:
         return False
-    return any(slug in f for f in os.listdir("_posts"))
+    try:
+        age = (datetime.now(KST).date()
+               - datetime.strptime(latest, "%Y-%m-%d").date()).days
+        return age < DUP_WINDOW_DAYS
+    except Exception:
+        return True
+
+
+def unique_slug(slug, now):
+    """URL 충돌 방지: 기존 슬러그와 겹치면 -MMDD, 그래도 겹치면 -2, -3…"""
+    existing = _existing_slugs()
+    if slug not in existing:
+        return slug
+    cand = f"{slug}-{now:%m%d}"
+    if cand not in existing:
+        return cand
+    n = 2
+    while f"{cand}-{n}" in existing:
+        n += 1
+    return f"{cand}-{n}"
 
 
 # ═════════ 정화: 모델이 형식을 어겨도 결과물은 깨끗하게 ═════════
@@ -273,7 +328,7 @@ def parse_meta(final, topic):
     head, sep, body = final.partition("---")
     src = head if sep else final
     title = extract_title(src, topic)
-    desc = tags = imgq = ""
+    desc = tags = imgq = eslug = ""
     for ln in src.splitlines():
         s = ln.strip()
         u = s.upper()
@@ -283,12 +338,20 @@ def parse_meta(final, topic):
             tags = re.sub(r"^TAGS\s*[:：]\s*", "", s, flags=re.I).strip()
         elif u.startswith("IMGQ"):
             imgq = re.sub(r"^IMGQ\s*[:：]\s*", "", s, flags=re.I).strip()
+        elif u.startswith("SLUG"):
+            eslug = re.sub(r"^SLUG\s*[:：]\s*", "", s, flags=re.I).strip()
     body = sanitize_body(body if sep else final)
     if not desc:
         desc = re.sub(r"[#*`\n]+", " ", body)[:100].strip()
     desc = re.sub(r"[#*`\"]+", "", desc)[:120]
     tags = ", ".join(x.strip() for x in tags.split(",") if x.strip())[:80]
-    return title, desc, tags, imgq, body
+    # 영어 슬러그: SLUG → IMGQ → 한글 슬러그 순 폴백
+    eslug = re.sub(r"[^a-z0-9]+", "-", eslug.lower()).strip("-")
+    if not (3 <= len(eslug) <= 60):
+        eslug = re.sub(r"[^a-z0-9]+", "-", (imgq or "").lower()).strip("-")
+    if not (3 <= len(eslug) <= 60):
+        eslug = slugify(topic)
+    return title, desc, tags, imgq, eslug[:60], body
 
 
 def write_post(t):
@@ -308,6 +371,7 @@ def write_post(t):
         "DESC: (검색결과용 요약 1문장, 70~110자)\n"
         "TAGS: (키워드 3~5개, 쉼표 구분)\n"
         "IMGQ: (사진 검색용 영어 단어 2~3개)\n"
+        "SLUG: (URL용 영어 슬러그, 소문자-하이픈, 3~6단어. 예: mexico-vs-england-preview)\n"
         "---\n"
         "(퇴고된 본문 전체. 소제목은 반드시 '## '로 시작하고 앞뒤 빈 줄. 본문에 TITLE/DESC 등 라벨 금지)\n\n"
         "=== 초안 ===\n" + draft, 2500)
@@ -327,6 +391,7 @@ def write_post_en(t, body_kr):
         "DESC: (one-sentence meta description)\n"
         "TAGS: (3-5 keywords, comma-separated)\n"
         "IMGQ: (2-3 English words for stock photo search)\n"
+        "SLUG: (url slug, lowercase-hyphen, 3-6 words)\n"
         "---\n"
         "(full article, markdown, '## ' subheadings on their own lines)\n\n"
         "=== Korean article ===\n" + body_kr[:4000], 2200)
@@ -379,8 +444,7 @@ def related_links(category, current_slug, absolute=False):
     return "\n\n---\n\n### 📚 함께 읽으면 좋은 글\n" + "\n".join(links)
 
 
-def publish_github(title, desc, tags, image_url, body_md, t, now):
-    slug = slugify(t["topic"])
+def publish_github(title, desc, tags, image_url, body_md, t, now, slug):
     fname = f"_posts/{now:%Y-%m-%d}-{slug}.md"
     img_line = f'image: "{image_url}"\n' if image_url else ""
     front = ("---\n"
@@ -392,6 +456,7 @@ def publish_github(title, desc, tags, image_url, body_md, t, now):
     os.makedirs("_posts", exist_ok=True)
     with open(fname, "w", encoding="utf-8") as f:
         f.write(front + body_md + related_links(t["category"], slug) + "\n")
+    _log_topic(t["topic"], now)
     return f"{SITE_URL}/{slug}/"
 
 
@@ -422,17 +487,17 @@ def main():
                 time.sleep(15)
             try:
                 # 리트라이 축소: 품질 미달 시 재작성 없이 제외 (LLM 낭비 방지)
-                title, desc, tags, imgq, body = write_post(t)
+                title, desc, tags, imgq, eslug, body = write_post(t)
                 if not qa_ok(body):
                     notify(f"⚠️ 품질 미달 제외: {t['topic']}")
                     continue
 
                 body, image_url = add_image(body, imgq, t["topic"])
                 body_m = inject_monetize(body, t["category"], t["topic"])
-                slug = slugify(t["topic"])
+                slug = unique_slug(eslug, now)
 
                 chans = ["GitHub"]
-                gh_url = publish_github(title, desc, tags, image_url, body_m, t, now)
+                gh_url = publish_github(title, desc, tags, image_url, body_m, t, now, slug)
 
                 body_ext = body_m + related_links(t["category"], slug, absolute=True)
                 for name, fn in (("Blogger", publish_blogger), ("Naver", publish_naver)):
@@ -444,7 +509,7 @@ def main():
 
                 if EN_ENABLED:
                     try:
-                        etitle, edesc, etags, eimgq, ebody = write_post_en(t, body)
+                        etitle, edesc, etags, eimgq, _es, ebody = write_post_en(t, body)
                         if qa_ok_en(ebody):
                             ebody, _ = add_image(ebody, eimgq, t["topic"])
                             ebody = inject_monetize_en(ebody, eimgq or t["topic"])
