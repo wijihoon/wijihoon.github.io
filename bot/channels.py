@@ -257,10 +257,25 @@ def publish_hashnode(title, body_md, category):
            "variables": {"input": {"title": title,
                                    "contentMarkdown": strip_html_ads(body_md),
                                    "publicationId": pub}}}
-    res = _post("https://gql.hashnode.com/", gql,
-                {"Authorization": tok, "Content-Type": "application/json"})
+    # 엣지가 브라우저 UA를 웹앱으로 라우팅 → API 클라이언트 UA(curl) 사용,
+    # 리다이렉트는 따라가지 않고 '감지'해서 원인을 로그로 확정
+    r = requests.post("https://gql.hashnode.com/", json=gql,
+                      headers={"Authorization": tok,
+                               "Content-Type": "application/json",
+                               "Accept": "application/json",
+                               "User-Agent": "curl/8.5.0"},
+                      timeout=30, allow_redirects=False)
+    if r.status_code in (301, 302, 303, 307, 308):
+        print(f"Hashnode 리다이렉트 감지({r.status_code}) → {r.headers.get('Location')}", flush=True)
+        return None
+    ct = r.headers.get("content-type", "")
+    if r.status_code != 200 or "json" not in ct:
+        print(f"Hashnode 비정상 응답: status={r.status_code}, content-type={ct}, "
+              f"body={r.text[:150]}", flush=True)
+        return None
+    res = r.json()
     if res.get("errors"):
-        print("Hashnode 오류:", str(res["errors"])[:200], flush=True)
+        print("Hashnode GraphQL 오류:", str(res["errors"])[:200], flush=True)
         return None
     return (((res.get("data") or {}).get("publishPost") or {}).get("post") or {}).get("url")
 

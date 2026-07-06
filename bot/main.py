@@ -318,30 +318,42 @@ def sanitize_body(body):
     return re.sub(r"\n{3,}", "\n\n", body).strip()
 
 
-def extract_title(text, topic):
+def extract_title(text, topic, lang="ko"):
     m = re.search(r"^\s*(?:TITLE|제목|클릭을 부르는 제목[^:：]*)\s*[:：]\s*(.+)$",
                   text, re.M | re.I)
     cand = m.group(1) if m else ""
-    cand = re.sub(r"[#*`=_\"']+", " ", cand)
-    # 작은 모델 폴백 시 섞이는 한자/키릴 등 이질 문자 제거
+    cand = re.sub(r"[#*`=_\"]+", " ", cand)
     cand = re.sub(r"[\u4e00-\u9fff\u0400-\u04ff]+", "", cand)
     cand = re.sub(r"\s{2,}", " ", cand).strip()
-    if not (8 <= len(cand) <= 45):
-        first = re.sub(r"[#*`]+", "", text.strip().split("\n")[0])[:60]
-        if 10 <= len(first) <= 45 and ":" not in first[:6]:
-            cand = first.strip()
-    # glm류 모델의 reasoning 누출 차단: 한글 없는 제목/분석 문구는 폴백
+
+    if lang == "en":
+        # 영어 제목: 한글이 섞이면 무효, reasoning 문구 무효
+        if re.search(r"[가-힣]", cand) or re.search(r"(?i)analyz|the request|step \d", cand):
+            cand = ""
+        # EN은 첫 줄 폴백 없음 — TITLE 형식이 아니면 바로 템플릿 (임의 문장 승격 방지)
+        if not (15 <= len(cand) <= 80):
+            if re.search(r"[가-힣]", topic):
+                cand = "Why Everyone in Korea Is Searching for This Right Now"
+            else:
+                cand = f"Why '{topic}' Is Suddenly Trending: What to Know"[:80]
+        return cand[:80]
+
+    # 한국어 제목
     if not re.search(r"[가-힣]", cand) or re.search(r"(?i)analyz|request|step \d|^\d+\.\s*[A-Za-z]", cand):
         cand = ""
+    if not (8 <= len(cand) <= 45):
+        first = re.sub(r"[#*`]+", "", text.strip().split("\n")[0])[:60]
+        if 10 <= len(first) <= 45 and re.search(r"[가-힣]", first) and ":" not in first[:6]:
+            cand = first.strip()
     if not (8 <= len(cand) <= 45):
         cand = f"{topic}, 지금 검색량이 급증한 이유"[:40]
     return cand[:40]
 
 
-def parse_meta(final, topic):
+def parse_meta(final, topic, lang="ko"):
     head, sep, body = final.partition("---")
     src = head if sep else final
-    title = extract_title(src, topic)
+    title = extract_title(src, topic, lang)
     desc = tags = imgq = eslug = ""
     for ln in src.splitlines():
         s = ln.strip()
@@ -416,7 +428,7 @@ def write_post_en(t, body_kr, offset=0):
         "(full article, markdown, '## ' subheadings on their own lines)\n\n"
         "=== Korean article ===\n" + body_kr[:4000], 2200, offset=offset)
     time.sleep(10)
-    return parse_meta(final, t["topic"])
+    return parse_meta(final, t["topic"], lang="en")
 
 
 def qa_report(body):
@@ -445,7 +457,9 @@ def qa_ok(body):
 
 
 def qa_ok_en(body):
-    return len(body) >= 500 and body.count("##") >= 2 and "TITLE:" not in body
+    hangul = len(re.findall(r"[가-힣]", body))
+    return (len(body) >= 500 and body.count("##") >= 2
+            and "TITLE:" not in body and hangul < len(body) * 0.05)
 
 
 def add_image(body_md, imgq, topic):
