@@ -92,8 +92,13 @@ def collect_trends():
 
 
 # ───────── LLM: OpenAI 호환 통합 + 6단계 캐스케이드 ─────────
+LAST_MODEL = ""      # 마지막으로 응답을 만든 모델 (불량 격리용)
+BAD_MODELS = set()   # 이번 실행에서 품질 미달을 만든 모델
+
+
 def _chat(base, key, model, prompt, max_tokens):
-    if not key:
+    global LAST_MODEL
+    if not key or model in BAD_MODELS:
         return None
     try:
         r = requests.post(base, json={"model": model,
@@ -116,6 +121,7 @@ def _chat(base, key, model, prompt, max_tokens):
         if not out:
             print(f"{model} 빈 응답 (keys={list(j.keys())})", flush=True)
             return None
+        LAST_MODEL = model
         return out
     except Exception as e:
         print(f"{model} 예외: {type(e).__name__}", flush=True)
@@ -123,8 +129,9 @@ def _chat(base, key, model, prompt, max_tokens):
 
 
 def _gemini(model, prompt, max_tokens):
+    global LAST_MODEL
     key = ENV("GEMINI_API_KEY")
-    if not key:
+    if not key or model in BAD_MODELS:
         return None
     try:
         r = requests.post(
@@ -137,7 +144,10 @@ def _gemini(model, prompt, max_tokens):
             return None
         cands = r.json().get("candidates") or []
         parts = (cands[0].get("content", {}).get("parts") or []) if cands else []
-        return (parts[0].get("text", "").strip() or None) if parts else None
+        out = (parts[0].get("text", "").strip() or None) if parts else None
+        if out:
+            LAST_MODEL = model
+        return out
     except Exception as e:
         print(f"Gemini({model}) 예외: {type(e).__name__}", flush=True)
         return None
@@ -189,10 +199,11 @@ CHAIN = [
 ]
 
 
-def llm(prompt, max_tokens=2500):
-    # 리트라이 축소: 캐스케이드 1회 순회 + 실패 시 45초 후 1회만 재순회 (총 2라운드)
+def llm(prompt, max_tokens=2500, offset=0):
+    """offset: 품질 재시도 시 다른 모델부터 시작 (같은 모델 재시도는 무의미)."""
+    chain = CHAIN[offset:] + CHAIN[:offset]
     for attempt in range(2):
-        for call in CHAIN:
+        for call in chain:
             out = call(prompt, max_tokens)
             if out:
                 return out
@@ -357,18 +368,24 @@ def parse_meta(final, topic):
     return title, desc, tags, imgq, eslug[:60], body
 
 
-def write_post(t):
+def write_post_fb(t, feedback=""):
+    return write_post(t, feedback)
+
+
+def write_post(t, feedback=""):
     draft = llm(
         f"토픽: {t['topic']}\n배경: {t['snippet']}\n카테고리: {t['category']}\n\n"
         "한국 독자용 고품질 블로그 글 초안을 마크다운으로 작성하라.\n"
+        "⚠️ 사고 과정·분석 단계·영어 메모를 절대 출력하지 마라. 오직 한국어 완성 글만.\n"
         "- 분량 1200~1800자\n"
         "- 구성: 궁금증을 짚는 도입 2~3문장 → '**3줄 요약**' 리스트 →\n"
         "  ## 소제목 3~4개(구체적 정보·수치·맥락) → ## 자주 묻는 질문(Q&A 3개) → 전망 마무리\n"
         "- 확인 안 된 사실 단정 금지('~로 알려졌다/보인다')\n"
-        "- 같은 문장 반복 금지, 광고체 금지", 2500)
+        "- 같은 문장 반복 금지, 광고체 금지" + feedback, 2500)
     time.sleep(10)
     final = llm(
         "너는 10년차 시니어 에디터다. 아래 초안을 퇴고하고, 정확히 아래 형식으로만 출력하라.\n"
+        "⚠️ 사고 과정·분석 단계를 출력하지 마라. 형식 외 어떤 말도 금지. 본문은 한국어.\n"
         "형식 라벨(TITLE 등)은 그대로 쓰고, 지시문을 되풀이하지 마라.\n\n"
         "TITLE: (제목만 작성. 25~38자. 숫자·호기심 갭·독자 이득 중 1개 사용. 예: '하이닉스 주가가 갑자기 뛴 3가지 이유'. 과장 금지)\n"
         "DESC: (검색결과용 요약 1문장, 70~110자)\n"
@@ -377,12 +394,12 @@ def write_post(t):
         "SLUG: (URL용 영어 슬러그, 소문자-하이픈, 3~6단어. 예: mexico-vs-england-preview)\n"
         "---\n"
         "(퇴고된 본문 전체. 소제목은 반드시 '## '로 시작하고 앞뒤 빈 줄. 본문에 TITLE/DESC 등 라벨 금지)\n\n"
-        "=== 초안 ===\n" + draft, 2500)
+        "=== 초안 ===\n" + draft + feedback, 2500)
     time.sleep(10)
     return parse_meta(final, t["topic"])
 
 
-def write_post_en(t, body_kr):
+def write_post_en(t, body_kr, offset=0):
     final = llm(
         "You are a senior editor for a global trends blog.\n"
         f"Topic (trending now): {t['topic']}\n"
@@ -397,21 +414,34 @@ def write_post_en(t, body_kr):
         "SLUG: (url slug, lowercase-hyphen, 3-6 words)\n"
         "---\n"
         "(full article, markdown, '## ' subheadings on their own lines)\n\n"
-        "=== Korean article ===\n" + body_kr[:4000], 2200)
+        "=== Korean article ===\n" + body_kr[:4000], 2200, offset=offset)
     time.sleep(10)
     return parse_meta(final, t["topic"])
 
 
-def qa_ok(body):
-    if re.search(r"[\u0400-\u04ff]", body):     # 키릴 문자 오염
-        return False
+def qa_report(body):
+    """품질 문제 사유 목록 — 비어 있으면 통과."""
+    problems = []
+    if len(body) < 800:
+        problems.append(f"본문이 짧음({len(body)}자<800)")
+    if body.count("##") < 3:
+        problems.append(f"소제목 부족({body.count('##')}<3)")
+    if re.search(r"[\u0400-\u04ff]", body):
+        problems.append("키릴 문자 오염")
     hangul = len(re.findall(r"[가-힣]", body))
-    if hangul < max(200, len(body) * 0.15):       # 한국어 글인데 한글이 적음 = reasoning 누출
-        return False
+    if hangul < max(200, len(body) * 0.15):
+        problems.append("한글 비율 낮음(영문 reasoning 누출 의심)")
     if re.search(r"(?i)analyze the request|as an ai|let's break", body):
-        return False
-    return (len(body) >= 800 and body.count("##") >= 3
-            and not any(b in body for b in ["죄송", "도와드릴 수 없", "AI 언어 모델", "TITLE:", "클릭을 부르는"]))
+        problems.append("모델 내부 분석 문구 누출")
+    for b in ["죄송", "도와드릴 수 없", "AI 언어 모델", "TITLE:", "클릭을 부르는"]:
+        if b in body:
+            problems.append(f"금지 문구 '{b}' 포함")
+            break
+    return problems
+
+
+def qa_ok(body):
+    return not qa_report(body)
 
 
 def qa_ok_en(body):
@@ -479,25 +509,40 @@ def main():
             return
         trends = categorize(trends)
 
-        seen, picked = set(), []
+        # 후보 큐: 카테고리 다양성 우선 정렬 + 실패 시 다음 후보로 채움
+        seen, front, back = set(), [], []
         for t in trends:
             if already_posted(t["topic"]):
                 continue
-            if t["category"] not in seen:
-                picked.append(t)
-                seen.add(t["category"])
-            if len(picked) >= MAX_POSTS:
-                break
+            (front if t["category"] not in seen else back).append(t)
+            seen.add(t["category"])
+        candidates = front + back
 
-        report = []
-        for i, t in enumerate(picked):
-            if i:
+        report, done = [], 0
+        for t in candidates:
+            if done >= MAX_POSTS:
+                break
+            if done:
                 time.sleep(15)
             try:
-                # 리트라이 축소: 품질 미달 시 재작성 없이 제외 (LLM 낭비 방지)
-                title, desc, tags, imgq, eslug, body = write_post(t)
-                if not qa_ok(body):
-                    notify(f"⚠️ 품질 미달 제외: {t['topic']}")
+                # 피드백 재시도: 미달 사유를 프롬프트에 넣어 최대 2회
+                title = desc = tags = imgq = eslug = body = ""
+                problems = ["초기"]
+                for attempt in range(2):
+                    fb = ""
+                    if attempt and problems:
+                        fb = ("\n\n[중요] 직전 출력의 문제를 반드시 고쳐라: "
+                              + "; ".join(problems)
+                              + ". 반드시 한국어로, 형식 라벨을 지켜 다시 작성하라.")
+                    title, desc, tags, imgq, eslug, body = write_post_fb(t, fb)
+                    problems = qa_report(body)
+                    if not problems:
+                        break
+                    if LAST_MODEL:
+                        BAD_MODELS.add(LAST_MODEL)   # 미달 글을 만든 모델 격리
+                        print(f"🚫 모델 격리: {LAST_MODEL} (사유: {'; '.join(problems)})", flush=True)
+                if problems:
+                    notify(f"⚠️ 품질 미달 제외: {t['topic']} — {'; '.join(problems[:3])}")
                     continue
 
                 body, image_url = add_image(body, imgq, t["topic"])
@@ -518,6 +563,9 @@ def main():
                 if EN_ENABLED:
                     try:
                         etitle, edesc, etags, eimgq, _es, ebody = write_post_en(t, body)
+                        if not qa_ok_en(ebody):
+                            print("EN 1차 품질 미달 → 다른 모델로 재시도", flush=True)
+                            etitle, edesc, etags, eimgq, _es, ebody = write_post_en(t, body, offset=1)
                         if qa_ok_en(ebody):
                             ebody, _ = add_image(ebody, eimgq, t["topic"])
                             ebody = inject_monetize_en(ebody, eimgq or t["topic"])
@@ -537,6 +585,7 @@ def main():
 
                 telegram_broadcast(f"📰 {title}\n{gh_url}")
                 report.append(f"· [{t['category']}] {title} → {', '.join(chans)}")
+                done += 1
             except Exception as e:
                 notify(f"⚠️ '{t['topic']}' 실패: {type(e).__name__}")
 
