@@ -29,7 +29,7 @@ def _post(url, data=None, headers=None, form=False):
     try:
         return r.json()
     except Exception:
-        print(f"비JSON 응답 @ {url[:60]}: {r.text[:200]}", flush=True)
+        print(f"비JSON 응답 (status {r.status_code}, final {r.url}): {r.text[:150]}", flush=True)
         raise
 
 
@@ -258,7 +258,8 @@ def publish_hashnode(title, body_md, category):
                                    "contentMarkdown": strip_html_ads(body_md),
                                    "publicationId": pub}}}
     res = _post("https://gql.hashnode.com/", gql,
-                {"Authorization": tok, "Content-Type": "application/json"})
+                {"Authorization": tok, "Content-Type": "application/json",
+                 "User-Agent": "curl/8.5.0"})
     if res.get("errors"):
         print("Hashnode 오류:", str(res["errors"])[:200], flush=True)
         return None
