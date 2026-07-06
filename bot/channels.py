@@ -1,48 +1,52 @@
-"""다채널 게시 + 수익화 + 이미지 v9 — 브라우저 UA(Cloudflare 1010 해결), dev.to/Hashnode 광고 제거"""
+"""다채널 게시 + 수익화 + 이미지 v11 — requests 기반(리다이렉트 안전), 자가진단 포함"""
 import hashlib
 import hmac
 import json
 import os
 import re
-import urllib.error
+import requests
 import urllib.parse
-import urllib.request
 from datetime import datetime, timezone
 
-# Cloudflare가 파이썬 기본 UA를 차단(error 1010) → 모든 요청에 브라우저 UA
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
 
 
-def _req(url, data=None, headers=None):
-    h = {"User-Agent": UA}
-    h.update(headers or {})
-    return urllib.request.Request(url, data=data, headers=h)
+def _headers(extra=None):
+    h = {"User-Agent": UA, "Accept": "application/json"}
+    h.update(extra or {})
+    return h
 
 
 def _post(url, data=None, headers=None, form=False):
-    if isinstance(data, dict) and not form:
-        data = json.dumps(data).encode()
-    elif isinstance(data, dict):
-        data = urllib.parse.urlencode(data).encode()
+    if form:
+        r = requests.post(url, data=data, headers=_headers(headers), timeout=30)
+    else:
+        r = requests.post(url, json=data, headers=_headers(headers), timeout=30)
+    if r.status_code >= 400:
+        print(f"HTTP {r.status_code} @ {url[:60]}: {r.text[:200]}", flush=True)
+        r.raise_for_status()
     try:
-        raw = urllib.request.urlopen(_req(url, data, headers), timeout=30).read().decode()
-    except urllib.error.HTTPError as e:
-        print(f"HTTP {e.code} @ {url[:60]}: {e.read().decode()[:200]}", flush=True)
-        raise
-    try:
-        return json.loads(raw)
+        return r.json()
     except Exception:
-        print(f"비JSON 응답 @ {url[:60]}: {raw[:200]}", flush=True)
+        print(f"비JSON 응답 @ {url[:60]}: {r.text[:200]}", flush=True)
         raise
 
 
 def _get(url, headers=None):
+    r = requests.get(url, headers=_headers(headers), timeout=20)
+    if r.status_code >= 400:
+        print(f"HTTP {r.status_code} @ {url[:60]}: {r.text[:200]}", flush=True)
+        r.raise_for_status()
     try:
-        return json.loads(urllib.request.urlopen(_req(url, None, headers), timeout=20).read().decode())
-    except urllib.error.HTTPError as e:
-        print(f"HTTP {e.code} @ {url[:60]}: {e.read().decode()[:200]}", flush=True)
+        return r.json()
+    except Exception:
+        print(f"비JSON 응답 @ {url[:60]}: {r.text[:200]}", flush=True)
         raise
+
+
+def _status(e):
+    return getattr(getattr(e, "response", None), "status_code", 0)
 
 
 def md2html(md: str) -> str:
@@ -61,14 +65,13 @@ def md2html(md: str) -> str:
 
 
 def strip_html_ads(md: str) -> str:
-    """dev.to/Hashnode용: 광고 HTML 제거한 순수 마크다운."""
     md = re.sub(r"<script.*?</script>", "", md, flags=re.S)
     md = re.sub(r"<ins .*?</ins>", "", md, flags=re.S)
     md = re.sub(r"<hr>|</?p[^>]*>", "", md)
     return re.sub(r"\n{3,}", "\n\n", md).strip()
 
 
-# ═══════ 이미지: Pexels → Unsplash 폴백 ═══════
+# ═══════ 이미지 ═══════
 def fetch_image(query_en: str):
     px = os.environ.get("PEXELS_API_KEY")
     if px:
@@ -87,16 +90,16 @@ def fetch_image(query_en: str):
         try:
             q = urllib.parse.quote((query_en or "")[:60])
             d = _get(f"https://api.unsplash.com/search/photos?query={q}&per_page=3&client_id={un}")
-            r = (d.get("results") or [None])[0]
-            if r:
+            r0 = (d.get("results") or [None])[0]
+            if r0:
                 try:
-                    urllib.request.urlopen(
-                        _req(r["links"]["download_location"] + f"&client_id={un}"), timeout=10)
+                    requests.get(r0["links"]["download_location"] + f"&client_id={un}",
+                                 headers=_headers(), timeout=10)
                 except Exception:
                     pass
-                name = r["user"]["name"]
-                return (r["urls"]["regular"],
-                        f"*Photo by [{name}]({r['user']['links']['html']}) on Unsplash*")
+                name = r0["user"]["name"]
+                return (r0["urls"]["regular"],
+                        f"*Photo by [{name}]({r0['user']['links']['html']}) on Unsplash*")
         except Exception as e:
             print("Unsplash 스킵:", type(e).__name__, flush=True)
     return None, ""
@@ -194,18 +197,17 @@ def publish_blogger(title, body_md, category, blog_env="BLOGGER_BLOG_ID"):
                      "content": md2html(body_md), "labels": [category]},
                     {"Authorization": f"Bearer {tok}", "Content-Type": "application/json"})
         return res.get("url")
-    except urllib.error.HTTPError as e:
-        if e.code == 403:
-            # 자가 진단: 이 토큰으로 접근 가능한 블로그가 뭔지 출력
+    except Exception as e:
+        if _status(e) == 403:
             try:
                 mine = _get("https://www.googleapis.com/blogger/v3/users/self/blogs",
                             {"Authorization": f"Bearer {tok}"})
                 ids = [(b.get("id"), b.get("url")) for b in mine.get("items", [])]
-                print(f"🔎 Blogger 진단 — 토큰이 접근 가능한 블로그: {ids} / 설정된 ID: {blog}", flush=True)
-                print("   → 목록에 설정 ID가 있으면 '스팸 잠금'(Blogger 대시보드에서 검토 요청), "
-                      "없으면 ID 불일치, 목록 조회도 403이면 토큰 스코프 문제", flush=True)
+                print(f"🔎 Blogger 진단 — 접근 가능: {ids} / 설정 ID: {blog}", flush=True)
+                print("   → 읽기는 되는데 쓰기 403 = 토큰이 readonly 스코프일 가능성 큼. "
+                      "OAuth Playground에서 auth/blogger(full) 스코프로 재발급 필요", flush=True)
             except Exception:
-                print("🔎 Blogger 진단 실패 — 토큰 스코프가 blogger 권한을 포함하지 않는 것으로 보임", flush=True)
+                print("🔎 목록 조회도 403 — 토큰에 blogger 스코프 자체가 없음", flush=True)
         raise
 
 
@@ -233,12 +235,12 @@ def publish_devto(title, body_md, category):
         return None
     payload = {"article": {"title": title, "body_markdown": strip_html_ads(body_md),
                            "published": True, "tags": ["trends", "news"]}}
-    hdr = {"api-key": key, "Content-Type": "application/json"}
     for attempt in range(2):
         try:
-            return _post("https://dev.to/api/articles", payload, hdr).get("url")
-        except urllib.error.HTTPError as e:
-            if e.code == 429 and attempt == 0:
+            return _post("https://dev.to/api/articles", payload,
+                         {"api-key": key, "Content-Type": "application/json"}).get("url")
+        except Exception as e:
+            if _status(e) == 429 and attempt == 0:
                 import time as _t
                 print("dev.to 속도제한 — 305초 대기 후 재시도", flush=True)
                 _t.sleep(305)
@@ -255,8 +257,11 @@ def publish_hashnode(title, body_md, category):
            "variables": {"input": {"title": title,
                                    "contentMarkdown": strip_html_ads(body_md),
                                    "publicationId": pub}}}
-    res = _post("https://gql.hashnode.com", gql,
+    res = _post("https://gql.hashnode.com/", gql,
                 {"Authorization": tok, "Content-Type": "application/json"})
+    if res.get("errors"):
+        print("Hashnode 오류:", str(res["errors"])[:200], flush=True)
+        return None
     return (((res.get("data") or {}).get("publishPost") or {}).get("post") or {}).get("url")
 
 

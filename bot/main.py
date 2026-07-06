@@ -104,7 +104,19 @@ def _chat(base, key, model, prompt, max_tokens):
         if r.status_code != 200:
             print(f"{model} {r.status_code}", flush=True)
             return None
-        return r.json()["choices"][0]["message"]["content"].strip() or None
+        j = r.json()
+        ch = (j.get("choices") or [{}])[0]
+        msg = ch.get("message") or {}
+        out = msg.get("content")
+        if isinstance(out, list):                       # 일부 모델: 파트 리스트
+            out = "".join(p.get("text", "") for p in out if isinstance(p, dict))
+        if not out:
+            out = ch.get("text") or msg.get("reasoning") or ""
+        out = (out or "").strip()
+        if not out:
+            print(f"{model} 빈 응답 (keys={list(j.keys())})", flush=True)
+            return None
+        return out
     except Exception as e:
         print(f"{model} 예외: {type(e).__name__}", flush=True)
         return None
@@ -146,7 +158,11 @@ def _cerebras(prompt, max_tokens):
                              headers={"Authorization": f"Bearer {key}"}, timeout=20)
             ids = [m.get("id", "") for m in r.json().get("data", [])] if r.status_code == 200 else []
             # 선호 순서: 큰 llama → gpt-oss → qwen → 아무거나
-            pref = [i for i in ids if "70b" in i] + [i for i in ids if "gpt-oss" in i]                  + [i for i in ids if "qwen" in i] + ids
+            pref = ([i for i in ids if "llama" in i and "70b" in i]
+                    + [i for i in ids if "glm" in i]
+                    + [i for i in ids if "qwen" in i]
+                    + [i for i in ids if "gemma" in i]
+                    + ids)
             _CEREBRAS_MODEL = pref[0] if pref else ""
             print(f"Cerebras 모델 선택: {_CEREBRAS_MODEL or '(없음)'} / 가용: {ids[:6]}", flush=True)
         except Exception as e:
