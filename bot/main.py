@@ -319,6 +319,9 @@ def extract_title(text, topic):
         first = re.sub(r"[#*`]+", "", text.strip().split("\n")[0])[:60]
         if 10 <= len(first) <= 45 and ":" not in first[:6]:
             cand = first.strip()
+    # glm류 모델의 reasoning 누출 차단: 한글 없는 제목/분석 문구는 폴백
+    if not re.search(r"[가-힣]", cand) or re.search(r"(?i)analyz|request|step \d|^\d+\.\s*[A-Za-z]", cand):
+        cand = ""
     if not (8 <= len(cand) <= 45):
         cand = f"{topic}, 지금 검색량이 급증한 이유"[:40]
     return cand[:40]
@@ -400,7 +403,12 @@ def write_post_en(t, body_kr):
 
 
 def qa_ok(body):
-    if re.search(r"[\u0400-\u04ff]", body):     # 키릴 문자 오염 = 모델 폭주 신호
+    if re.search(r"[\u0400-\u04ff]", body):     # 키릴 문자 오염
+        return False
+    hangul = len(re.findall(r"[가-힣]", body))
+    if hangul < max(200, len(body) * 0.15):       # 한국어 글인데 한글이 적음 = reasoning 누출
+        return False
+    if re.search(r"(?i)analyze the request|as an ai|let's break", body):
         return False
     return (len(body) >= 800 and body.count("##") >= 3
             and not any(b in body for b in ["죄송", "도와드릴 수 없", "AI 언어 모델", "TITLE:", "클릭을 부르는"]))
