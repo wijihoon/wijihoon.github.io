@@ -15,7 +15,8 @@ SLUG: im-chang-jung-music-and-works
 
 ## 임창정의 음악 세계
 
-임창정의 음악 세계는 매우 다양합니다. 그는 포크, 록, 팝 등 다양한 음악 장르를 시도해 왔으며, 그의 음악은 항상 새로운 thử물을 가져다줍니다. 그의 대표곡인 "나는 나"와 "소주 한 잔"은 많은 사람들이 사랑하는 노래입니다.
+임창정의 음악 세계는 매우 다양합니다. 그는 포크, 록, 팝 등 다양한 음악 장르를 시도해 왔으며, 그의 음악은 항상 새로운 thử물을 가져다줍니다. 그의 대표곡인 "나는 나"와 "소주 한 잔"은 많은 사람들이
+사랑하는 노래입니다.
 
 ## 임창정의 작품 활동
 
@@ -23,15 +24,18 @@ SLUG: im-chang-jung-music-and-works
 
 ## 임창정의 팬 문화
 
-<ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-6340177904204536" data-ad-format="auto" data-full-width-responsive="true"></ins><script>(adsbygoogle=window.adsbygoogle||[]).push({});</script>
+<ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-6340177904204536" data-ad-format="auto" data-full-width-responsive="true"></ins><script>(
+adsbygoogle=window.adsbygoogle||[]).push({});</script>
 
-임창정의 팬들은 그의 음악과 작품 활동에 대해 매우 熱情적입니다. 그의 팬들은 그의 새로운 작품을 항상 기대하고 있으며, 그의 공연과 팬미팅에 열심히 참여하고 있습니다. 임창정의 팬 문화는 한국 예술계에서 큰 영향을 미치고 있습니다.
+임창정의 팬들은 그의 음악과 작품 활동에 대해 매우 熱情적입니다. 그의 팬들은 그의 새로운 작품을 항상 기대하고 있으며, 그의 공연과 팬미팅에 열심히 참여하고 있습니다. 임창정의 팬 문화는 한국 예술계에서 큰
+영향을 미치고 있습니다.
 
 <ins class="kakao_ad_area" style="display:none;" data-ad-unit="DAN-5eScgrfo8nDFnDK1" data-ad-width="160" data-ad-height="600"></ins><script type="text/javascript" src="//t1.daumcdn.net/kas/static/ba.min.js" async></script>
 
 ## 임창정의 사회적 영향
 
-임창정의 음악과 작품 활동은 한국 사회에 큰 영향을 미치고 있습니다. 그의 음악과 예술 세계는 많은 사람들에게 새로운 영감과 감동을 주고 있으며, 그의 팬들은 그의 작품을 통해 새로운 시각과 관점을 얻을 수 있습니다.
+임창정의 음악과 작품 활동은 한국 사회에 큰 영향을 미치고 있습니다. 그의 음악과 예술 세계는 많은 사람들에게 새로운 영감과 감동을 주고 있으며, 그의 팬들은 그의 작품을 통해 새로운 시각과 관점을 얻을 수
+있습니다.
 
 ## 자주 묻는 질문(Q&A)
 
@@ -42,13 +46,15 @@ A: 네, 임창정은 배우로도 활동하고 있으며, 다양한 드라마와
 Q: 임창정의 팬 문화는 어떤가요?
 A: 임창정의 팬 문화는 매우 熱情적입니다. 그의 팬들은 그의 새로운 작품을 항상 기대하고 있으며, 그의 공연과 팬미팅에 열심히 참여하고 있습니다.
 
-임창정의 음악과 작품 활동은 한국 예술계에 큰 영향을 미치고 있으며, 그의 팬들은 그의 새로운 작품을 항상 기대하고 있습니다. 임창정의 음악과 예술 세계를 통해 많은 사람들에게 새로운 영감과 감동을 주고 있습니다. 임창정의 계속되는 음악과 작품 활동을 통해, 우리는 그의 예술 세계를 더욱 깊이 이해할 수 있을 것입니다.
+임창정의 음악과 작품 활동은 한국 예술계에 큰 영향을 미치고 있으며, 그의 팬들은 그의 새로운 작품을 항상 기대하고 있습니다. 임창정의 음악과 예술 세계를 통해 많은 사람들에게 새로운 영감과 감동을 주고 있습니다.
+임창정의 계속되는 음악과 작품 활동을 통해, 우리는 그의 예술 세계를 더욱 깊이 이해할 수 있을 것입니다.
 
 <ins class="kakao_ad_area" style="display:none;" data-ad-unit="DAN-dpNPU1RlL33W9yvw" data-ad-width="160" data-ad-height="600"></ins><script type="text/javascript" src="//t1.daumcdn.net/kas/static/ba.min.js" async></script>
 
 ---
 
 ### 📚 함께 읽으면 좋은 글
+
 - [이진숙, 복지 현장을 바꾼 5가지 입법 성과와 앞으로의 전망](/이진숙/)
-- [1.  Analyze the Request:](/멕시코-대-잉글랜드/)
+- [1. Analyze the Request:](/멕시코-대-잉글랜드/)
 - [박유천, 3가지 이슈로적인 관심을 받고 있다](/park-yoochun-scandal/)

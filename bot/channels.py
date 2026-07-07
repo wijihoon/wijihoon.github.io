@@ -1,7 +1,6 @@
 """다채널 게시 + 수익화 + 이미지 v11 — requests 기반(리다이렉트 안전), 자가진단 포함"""
 import hashlib
 import hmac
-import json
 import os
 import re
 import requests
@@ -240,44 +239,17 @@ def publish_devto(title, body_md, category):
             return _post("https://dev.to/api/articles", payload,
                          {"api-key": key, "Content-Type": "application/json"}).get("url")
         except Exception as e:
-            if _status(e) == 429 and attempt == 0:
+            code = _status(e)
+            if code == 429 and attempt == 0:
                 import time as _t
                 print("dev.to 속도제한 — 305초 대기 후 재시도", flush=True)
                 _t.sleep(305)
                 continue
+            if code == 422 and "already been used" in getattr(getattr(e, "response", None), "text", ""):
+                # 같은 제목이 이미 존재 = 사실상 게시 완료 (429 후 이중전송 등)
+                print("dev.to: 동일 제목 이미 게시됨 → 성공 처리", flush=True)
+                return "already-posted"
             raise
-
-
-def publish_hashnode(title, body_md, category):
-    tok, pub = os.environ.get("HASHNODE_TOKEN"), os.environ.get("HASHNODE_PUB_ID")
-    if not (tok and pub):
-        return None
-    gql = {"query": """mutation($input: PublishPostInput!) {
-             publishPost(input: $input) { post { url } } }""",
-           "variables": {"input": {"title": title,
-                                   "contentMarkdown": strip_html_ads(body_md),
-                                   "publicationId": pub}}}
-    # 엣지가 브라우저 UA를 웹앱으로 라우팅 → API 클라이언트 UA(curl) 사용,
-    # 리다이렉트는 따라가지 않고 '감지'해서 원인을 로그로 확정
-    r = requests.post("https://gql.hashnode.com/", json=gql,
-                      headers={"Authorization": tok,
-                               "Content-Type": "application/json",
-                               "Accept": "application/json",
-                               "User-Agent": "curl/8.5.0"},
-                      timeout=30, allow_redirects=False)
-    if r.status_code in (301, 302, 303, 307, 308):
-        print(f"Hashnode 리다이렉트 감지({r.status_code}) → {r.headers.get('Location')}", flush=True)
-        return None
-    ct = r.headers.get("content-type", "")
-    if r.status_code != 200 or "json" not in ct:
-        print(f"Hashnode 비정상 응답: status={r.status_code}, content-type={ct}, "
-              f"body={r.text[:150]}", flush=True)
-        return None
-    res = r.json()
-    if res.get("errors"):
-        print("Hashnode GraphQL 오류:", str(res["errors"])[:200], flush=True)
-        return None
-    return (((res.get("data") or {}).get("publishPost") or {}).get("post") or {}).get("url")
 
 
 def telegram_broadcast(text):
