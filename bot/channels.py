@@ -1,6 +1,7 @@
 """다채널 게시 + 수익화 + 이미지 v11 — requests 기반(리다이렉트 안전), 자가진단 포함"""
 import hashlib
 import hmac
+import json
 import os
 import re
 import requests
@@ -182,14 +183,44 @@ def inject_monetize_en(body_md: str, keyword_en: str) -> str:
 
 
 # ═══════ 게시 채널 ═══════
+_G_TOKEN = None  # 실행당 1회만 갱신
+
+
+def _google_access_token():
+    """구글 액세스 토큰 갱신 + 정확한 진단 로그 (시크릿은 마스킹)."""
+    global _G_TOKEN
+    if _G_TOKEN:
+        return _G_TOKEN
+    cid = os.environ.get("GOOGLE_CLIENT_ID", "")
+    csec = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+    rtok = os.environ.get("GOOGLE_REFRESH_TOKEN", "")
+    print("🔎 Google 토큰 갱신 시도", flush=True)
+    print(f"   URI: POST https://oauth2.googleapis.com/token (grant_type=refresh_token)", flush=True)
+    print(f"   client_id: {cid[:14]}…{cid[-28:] if len(cid) > 42 else ''}  (길이 {len(cid)})", flush=True)
+    print(f"   client_secret: 길이 {len(csec)} (앞 4자 {csec[:4]}…)", flush=True)
+    print(f"   refresh_token: 길이 {len(rtok)}, 접두사 '{rtok[:4]}' "
+          f"{'✅ 구글 형식(1//)' if rtok.startswith('1//') else '⚠️ 구글 refresh token은 1// 로 시작해야 함'}",
+          flush=True)
+    try:
+        _G_TOKEN = _post("https://oauth2.googleapis.com/token",
+                         {"client_id": cid, "client_secret": csec, "refresh_token": rtok,
+                          "grant_type": "refresh_token"}, form=True)["access_token"]
+        print("   ✅ 액세스 토큰 발급 성공", flush=True)
+        return _G_TOKEN
+    except Exception:
+        print("   ❌ unauthorized_client 의미: 이 refresh_token은 위 client_id로 발급된 것이 아님.", flush=True)
+        print("      → OAuth Playground ⚙️ 'Use your own OAuth credentials'에 위와 '같은' "
+              "client_id/secret을 넣고 재발급했는지 확인. Playground 화면의 client_id 끝부분과 "
+              "위 로그의 client_id 끝부분이 일치해야 함.", flush=True)
+        raise
+
+
 def publish_blogger(title, body_md, category, blog_env="BLOGGER_BLOG_ID"):
     cid, csec = os.environ.get("GOOGLE_CLIENT_ID"), os.environ.get("GOOGLE_CLIENT_SECRET")
     rtok, blog = os.environ.get("GOOGLE_REFRESH_TOKEN"), os.environ.get(blog_env)
     if not all([cid, csec, rtok, blog]):
         return None
-    tok = _post("https://oauth2.googleapis.com/token",
-                {"client_id": cid, "client_secret": csec, "refresh_token": rtok,
-                 "grant_type": "refresh_token"}, form=True)["access_token"]
+    tok = _google_access_token()
     try:
         res = _post(f"https://www.googleapis.com/blogger/v3/blogs/{blog}/posts/",
                     {"kind": "blogger#post", "title": title,
