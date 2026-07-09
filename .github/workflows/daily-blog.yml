@@ -30,10 +30,14 @@ jobs:
           GEO: "KR,US"
           EN_POSTS: "1"
           # 한국 채널/수익화
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
-          BLOGGER_BLOG_ID: ${{ secrets.BLOGGER_BLOG_ID }}
+          WP_ACCESS_TOKEN: ${{ secrets.WP_ACCESS_TOKEN }}
+          WP_CLIENT_ID: ${{ secrets.WP_CLIENT_ID }}
+          WP_CLIENT_SECRET: ${{ secrets.WP_CLIENT_SECRET }}
+          WP_USERNAME: ${{ secrets.WP_USERNAME }}
+          WP_PASSWORD: ${{ secrets.WP_PASSWORD }}
+          WP_SITE: ${{ secrets.WP_SITE }}
+          WP_SITE_EN: ${{ secrets.WP_SITE_EN }}
+          INDEXNOW_KEY: ${{ secrets.INDEXNOW_KEY }}
           NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
           NAVER_REFRESH_TOKEN: ${{ secrets.NAVER_REFRESH_TOKEN }}
@@ -43,7 +47,6 @@ jobs:
           ADFIT_UNIT: ${{ secrets.ADFIT_UNIT }}
           ADFIT_UNIT2: ${{ secrets.ADFIT_UNIT2 }}
           # 영어 채널/수익화
-          BLOGGER_BLOG_ID_EN: ${{ secrets.BLOGGER_BLOG_ID_EN }}
           DEVTO_API_KEY: ${{ secrets.DEVTO_API_KEY }}
           AMAZON_TAG: ${{ secrets.AMAZON_TAG }}
           # 이미지

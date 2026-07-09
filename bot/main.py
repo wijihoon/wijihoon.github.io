@@ -10,8 +10,8 @@ import traceback
 from datetime import datetime, timezone, timedelta
 
 from channels import (inject_monetize, inject_monetize_en, fetch_image,
-                      publish_blogger, publish_blogger_en, publish_naver,
-                      publish_devto, telegram_broadcast)
+                      publish_wordpress, publish_wordpress_en, publish_naver,
+                      publish_devto, telegram_broadcast, indexnow_ping)
 
 KST = timezone(timedelta(hours=9))
 GROQ_KEY = os.environ["GROQ_API_KEY"]
@@ -42,12 +42,12 @@ def notify(msg):
 def channel_status():
     def on(*keys):
         return all(os.environ.get(k) for k in keys)
-
     chans = {
         "GitHub": True,
-        "Blogger": on("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN", "BLOGGER_BLOG_ID"),
+        "WordPress": (on("WP_ACCESS_TOKEN") or on("WP_CLIENT_ID", "WP_CLIENT_SECRET", "WP_USERNAME", "WP_PASSWORD")) and on("WP_SITE"),
+        "WordPress-EN": (on("WP_ACCESS_TOKEN") or on("WP_CLIENT_ID", "WP_CLIENT_SECRET", "WP_USERNAME", "WP_PASSWORD")) and on("WP_SITE_EN"),
         "Naver": on("NAVER_CLIENT_ID", "NAVER_CLIENT_SECRET", "NAVER_REFRESH_TOKEN"),
-        "Blogger-EN": on("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN", "BLOGGER_BLOG_ID_EN"),
+        "IndexNow": on("INDEXNOW_KEY"),
         "dev.to": on("DEVTO_API_KEY"),
         "Telegram": on("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"),
         "이미지": on("PEXELS_API_KEY") or on("UNSPLASH_ACCESS_KEY"),
@@ -92,8 +92,8 @@ def collect_trends():
 
 
 # ───────── LLM: OpenAI 호환 통합 + 6단계 캐스케이드 ─────────
-LAST_MODEL = ""  # 마지막으로 응답을 만든 모델 (불량 격리용)
-BAD_MODELS = set()  # 이번 실행에서 품질 미달을 만든 모델
+LAST_MODEL = ""      # 마지막으로 응답을 만든 모델 (불량 격리용)
+BAD_MODELS = set()   # 이번 실행에서 품질 미달을 만든 모델
 
 
 def _chat(base, key, model, prompt, max_tokens):
@@ -113,7 +113,7 @@ def _chat(base, key, model, prompt, max_tokens):
         ch = (j.get("choices") or [{}])[0]
         msg = ch.get("message") or {}
         out = msg.get("content")
-        if isinstance(out, list):  # 일부 모델: 파트 리스트
+        if isinstance(out, list):                       # 일부 모델: 파트 리스트
             out = "".join(p.get("text", "") for p in out if isinstance(p, dict))
         if not out:
             out = ch.get("text") or msg.get("reasoning") or ""
@@ -553,7 +553,7 @@ def main():
                     if not problems:
                         break
                     if LAST_MODEL:
-                        BAD_MODELS.add(LAST_MODEL)  # 미달 글을 만든 모델 격리
+                        BAD_MODELS.add(LAST_MODEL)   # 미달 글을 만든 모델 격리
                         print(f"🚫 모델 격리: {LAST_MODEL} (사유: {'; '.join(problems)})", flush=True)
                 if problems:
                     notify(f"⚠️ 품질 미달 제외: {t['topic']} — {'; '.join(problems[:3])}")
@@ -567,7 +567,7 @@ def main():
                 gh_url = publish_github(title, desc, tags, image_url, body_m, t, now, slug)
 
                 body_ext = body_m + related_links(t["category"], slug, absolute=True)
-                for name, fn in (("Blogger", publish_blogger), ("Naver", publish_naver)):
+                for name, fn in (("WordPress", publish_wordpress), ("Naver", publish_naver)):
                     try:
                         if fn(title, body_ext, t["category"]):
                             chans.append(name)
@@ -584,7 +584,7 @@ def main():
                             ebody, _ = add_image(ebody, eimgq, t["topic"])
                             ebody = inject_monetize_en(ebody, eimgq or t["topic"])
                             ebody += f"\n\n---\n*Originally covered on [Daily Trend Blog]({gh_url})*"
-                            for name, fn in (("Blogger-EN", publish_blogger_en),
+                            for name, fn in (("WordPress-EN", publish_wordpress_en),
                                              ("dev.to", publish_devto)):
                                 try:
                                     if fn(etitle, ebody, t["category"]):
@@ -597,6 +597,7 @@ def main():
                         notify(f"⚠️ EN 파이프라인 실패({t['topic']}): {type(e).__name__}")
 
                 telegram_broadcast(f"📰 {title}\n{gh_url}")
+                indexnow_ping([gh_url], SITE_URL)
                 report.append(f"· [{t['category']}] {title} → {', '.join(chans)}")
                 done += 1
             except Exception as e:

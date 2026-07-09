@@ -24,24 +24,24 @@ def _post(url, data=None, headers=None, form=False):
     else:
         r = requests.post(url, json=data, headers=_headers(headers), timeout=30)
     if r.status_code >= 400:
-        print(f"HTTP {r.status_code} @ {url[:60]}: {r.text[:200]}", flush=True)
+        print(f"HTTP {r.status_code} @ {url[:110]}: {r.text[:200]}", flush=True)
         r.raise_for_status()
     try:
         return r.json()
     except Exception:
-        print(f"비JSON 응답 @ {url[:60]}: {r.text[:200]}", flush=True)
+        print(f"비JSON 응답 @ {url[:110]}: {r.text[:200]}", flush=True)
         raise
 
 
 def _get(url, headers=None):
     r = requests.get(url, headers=_headers(headers), timeout=20)
     if r.status_code >= 400:
-        print(f"HTTP {r.status_code} @ {url[:60]}: {r.text[:200]}", flush=True)
+        print(f"HTTP {r.status_code} @ {url[:110]}: {r.text[:200]}", flush=True)
         r.raise_for_status()
     try:
         return r.json()
     except Exception:
-        print(f"비JSON 응답 @ {url[:60]}: {r.text[:200]}", flush=True)
+        print(f"비JSON 응답 @ {url[:110]}: {r.text[:200]}", flush=True)
         raise
 
 
@@ -183,66 +183,67 @@ def inject_monetize_en(body_md: str, keyword_en: str) -> str:
 
 
 # ═══════ 게시 채널 ═══════
-_G_TOKEN = None  # 실행당 1회만 갱신
+_WP_TOKEN = None
 
 
-def _google_access_token():
-    """구글 액세스 토큰 갱신 + 정확한 진단 로그 (시크릿은 마스킹)."""
-    global _G_TOKEN
-    if _G_TOKEN:
-        return _G_TOKEN
-    cid = os.environ.get("GOOGLE_CLIENT_ID", "")
-    csec = os.environ.get("GOOGLE_CLIENT_SECRET", "")
-    rtok = os.environ.get("GOOGLE_REFRESH_TOKEN", "")
-    print("🔎 Google 토큰 갱신 시도", flush=True)
-    print(f"   URI: POST https://oauth2.googleapis.com/token (grant_type=refresh_token)", flush=True)
-    print(f"   client_id: {cid[:14]}…{cid[-28:] if len(cid) > 42 else ''}  (길이 {len(cid)})", flush=True)
-    print(f"   client_secret: 길이 {len(csec)} (앞 4자 {csec[:4]}…)", flush=True)
-    print(f"   refresh_token: 길이 {len(rtok)}, 접두사 '{rtok[:4]}' "
-          f"{'✅ 구글 형식(1//)' if rtok.startswith('1//') else '⚠️ 구글 refresh token은 1// 로 시작해야 함'}",
-          flush=True)
-    try:
-        _G_TOKEN = _post("https://oauth2.googleapis.com/token",
-                         {"client_id": cid, "client_secret": csec, "refresh_token": rtok,
-                          "grant_type": "refresh_token"}, form=True)["access_token"]
-        print("   ✅ 액세스 토큰 발급 성공", flush=True)
-        return _G_TOKEN
-    except Exception:
-        print("   ❌ unauthorized_client 의미: 이 refresh_token은 위 client_id로 발급된 것이 아님.", flush=True)
-        print("      → OAuth Playground ⚙️ 'Use your own OAuth credentials'에 위와 '같은' "
-              "client_id/secret을 넣고 재발급했는지 확인. Playground 화면의 client_id 끝부분과 "
-              "위 로그의 client_id 끝부분이 일치해야 함.", flush=True)
-        raise
-
-
-def publish_blogger(title, body_md, category, blog_env="BLOGGER_BLOG_ID"):
-    cid, csec = os.environ.get("GOOGLE_CLIENT_ID"), os.environ.get("GOOGLE_CLIENT_SECRET")
-    rtok, blog = os.environ.get("GOOGLE_REFRESH_TOKEN"), os.environ.get(blog_env)
-    if not all([cid, csec, rtok, blog]):
+def _wp_access_token():
+    """WP_ACCESS_TOKEN(1회 발급, 만료 없음) 우선. 없으면 password grant 폴백."""
+    global _WP_TOKEN
+    if _WP_TOKEN:
+        return _WP_TOKEN
+    direct = os.environ.get("WP_ACCESS_TOKEN")
+    if direct:
+        _WP_TOKEN = direct
+        return _WP_TOKEN
+    cid = os.environ.get("WP_CLIENT_ID")
+    csec = os.environ.get("WP_CLIENT_SECRET")
+    user = os.environ.get("WP_USERNAME")
+    pw = os.environ.get("WP_PASSWORD")
+    if not all([cid, csec, user, pw]):
         return None
-    tok = _google_access_token()
+    res = _post("https://public-api.wordpress.com/oauth2/token",
+                {"client_id": cid, "client_secret": csec, "grant_type": "password",
+                 "username": user, "password": pw}, form=True)
+    _WP_TOKEN = res.get("access_token")
+    return _WP_TOKEN
+
+
+def publish_wordpress(title, body_md, category, site_env="WP_SITE"):
+    """WordPress.com 무료 블로그 게시. site_env: WP_SITE(한국어) / WP_SITE_EN(영어)."""
+    site = os.environ.get(site_env)
+    if not site:
+        return None
+    tok = _wp_access_token()
+    if not tok:
+        return None
+    res = _post(f"https://public-api.wordpress.com/rest/v1.1/sites/{site}/posts/new",
+                {"title": title, "content": md2html(body_md),
+                 "categories": category, "status": "publish"},
+                {"Authorization": f"Bearer {tok}"}, form=True)
+    return res.get("URL")
+
+
+def publish_wordpress_en(title, body_md, category):
+    return publish_wordpress(title, body_md, category, site_env="WP_SITE_EN")
+
+
+def indexnow_ping(urls, site_url):
+    """새 글 URL을 IndexNow로 검색엔진(Bing·Naver 등)에 즉시 통지 — 색인 가속."""
+    key = os.environ.get("INDEXNOW_KEY")
+    if not (key and urls):
+        return None
+    host = site_url.replace("https://", "").replace("http://", "").strip("/")
     try:
-        res = _post(f"https://www.googleapis.com/blogger/v3/blogs/{blog}/posts/",
-                    {"kind": "blogger#post", "title": title,
-                     "content": md2html(body_md), "labels": [category]},
-                    {"Authorization": f"Bearer {tok}", "Content-Type": "application/json"})
-        return res.get("url")
+        r = requests.post("https://api.indexnow.org/indexnow",
+                          json={"host": host, "key": key,
+                                "keyLocation": f"{site_url}/{key}.txt",
+                                "urlList": urls},
+                          headers=_headers({"Content-Type": "application/json"}), timeout=15)
+        print(f"IndexNow: {r.status_code} · {len(urls)}건 통지", flush=True)
+        return r.status_code in (200, 202)
     except Exception as e:
-        if _status(e) == 403:
-            try:
-                mine = _get("https://www.googleapis.com/blogger/v3/users/self/blogs",
-                            {"Authorization": f"Bearer {tok}"})
-                ids = [(b.get("id"), b.get("url")) for b in mine.get("items", [])]
-                print(f"🔎 Blogger 진단 — 접근 가능: {ids} / 설정 ID: {blog}", flush=True)
-                print("   → 읽기는 되는데 쓰기 403 = 토큰이 readonly 스코프일 가능성 큼. "
-                      "OAuth Playground에서 auth/blogger(full) 스코프로 재발급 필요", flush=True)
-            except Exception:
-                print("🔎 목록 조회도 403 — 토큰에 blogger 스코프 자체가 없음", flush=True)
-        raise
-
-
-def publish_blogger_en(title, body_md, category):
-    return publish_blogger(title, body_md, category, blog_env="BLOGGER_BLOG_ID_EN")
+        print("IndexNow 스킵:", type(e).__name__, flush=True)
+        return None
 
 
 def publish_naver(title, body_md, category):
